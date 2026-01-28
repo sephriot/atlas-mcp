@@ -22,6 +22,10 @@ pub struct IndexEntry {
     /// Keywords for search
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+
+    /// Source references (file paths or URLs)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<String>,
 }
 
 impl IndexEntry {
@@ -32,6 +36,7 @@ impl IndexEntry {
             atom_type: atom.atom_type,
             confidence: atom.confidence,
             tags: atom.tags.clone(),
+            sources: atom.sources.clone(),
         }
     }
 }
@@ -92,6 +97,7 @@ mod tests {
             atom_type: AtomType::Note,
             confidence: Confidence::High,
             tags: vec![],
+            sources: vec![],
         }
     }
 

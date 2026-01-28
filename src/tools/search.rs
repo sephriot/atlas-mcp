@@ -140,6 +140,7 @@ fn calculate_score(entry: &IndexEntry, query_terms: &[String]) -> f32 {
 
     let title_lower = entry.title.to_lowercase();
     let tags_lower: Vec<String> = entry.tags.iter().map(|t| t.to_lowercase()).collect();
+    let sources_lower: Vec<String> = entry.sources.iter().map(|s| s.to_lowercase()).collect();
 
     let mut score = 0.0;
 
@@ -162,6 +163,13 @@ fn calculate_score(entry: &IndexEntry, query_terms: &[String]) -> f32 {
         for tag in &tags_lower {
             if tag.contains(term) && tag != term {
                 score += 1.0;
+            }
+        }
+
+        // Source contains (file path or URL matching)
+        for source in &sources_lower {
+            if source.contains(term) {
+                score += 2.0;
             }
         }
     }
@@ -193,6 +201,18 @@ mod tests {
             atom_type: AtomType::Note,
             confidence: Confidence::High,
             tags: tags.into_iter().map(String::from).collect(),
+            sources: vec![],
+        }
+    }
+
+    fn make_entry_with_sources(id: &str, title: &str, tags: Vec<&str>, sources: Vec<&str>) -> IndexEntry {
+        IndexEntry {
+            id: id.to_string(),
+            title: title.to_string(),
+            atom_type: AtomType::Note,
+            confidence: Confidence::High,
+            tags: tags.into_iter().map(String::from).collect(),
+            sources: sources.into_iter().map(String::from).collect(),
         }
     }
 
@@ -267,6 +287,34 @@ mod tests {
         let terms = vec!["error".to_string()];
         let score = calculate_score(&entry, &terms);
         assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_score_source_match() {
+        let entry = make_entry_with_sources(
+            "K-000001",
+            "Context Detection",
+            vec!["git"],
+            vec!["src/context.rs", "src/config.rs"],
+        );
+        let terms = vec!["context".to_string()];
+        // Title contains "context" = 5.0, source contains "context" = 2.0
+        let score = calculate_score(&entry, &terms);
+        assert_eq!(score, 7.0);
+    }
+
+    #[test]
+    fn test_calculate_score_source_only_match() {
+        let entry = make_entry_with_sources(
+            "K-000001",
+            "Error Handling",
+            vec!["rust"],
+            vec!["src/tools/atoms.rs"],
+        );
+        let terms = vec!["atoms".to_string()];
+        // Only source matches = 2.0
+        let score = calculate_score(&entry, &terms);
+        assert_eq!(score, 2.0);
     }
 
     #[test]
