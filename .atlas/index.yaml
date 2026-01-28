@@ -9,6 +9,10 @@ entries:
   - architecture
   - mcp
   - rust
+  sources:
+  - README.md
+  - src/main.rs
+  - src/server.rs
 - id: K-000002
   title: MCP Server Implementation Pattern
   type: recipe
@@ -19,6 +23,8 @@ entries:
   - server
   - pattern
   - rust
+  sources:
+  - src/server.rs
 - id: K-000003
   title: YAML Storage Format Decision
   type: decision
@@ -28,6 +34,10 @@ entries:
   - yaml
   - architecture
   - decision
+  sources:
+  - src/storage/atoms.rs
+  - src/storage/index.rs
+  - src/models/atom.rs
 - id: K-000004
   title: Context Detection Requires Git Remote or Symlink
   type: gotcha
@@ -37,6 +47,8 @@ entries:
   - git
   - gotcha
   - configuration
+  sources:
+  - src/context.rs
 - id: K-000005
   title: File-Based Project Locking
   type: recipe
@@ -46,6 +58,8 @@ entries:
   - concurrency
   - fs2
   - pattern
+  sources:
+  - src/locking.rs
 - id: K-000006
   title: Search Scoring Algorithm
   type: note
@@ -54,6 +68,8 @@ entries:
   - search
   - algorithm
   - scoring
+  sources:
+  - src/tools/search.rs
 - id: K-000007
   title: CI Pipeline Configuration
   type: note
@@ -63,6 +79,8 @@ entries:
   - github-actions
   - testing
   - clippy
+  sources:
+  - .github/workflows/ci.yml
 - id: K-000008
   title: Error Handling Pattern
   type: recipe
@@ -72,3 +90,6 @@ entries:
   - thiserror
   - pattern
   - rust
+  sources:
+  - src/error.rs
+  - src/server.rs
