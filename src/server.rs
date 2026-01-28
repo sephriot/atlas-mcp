@@ -25,8 +25,8 @@ ATOM TYPES:
 - decision: Architectural rationale, why X over Y
 
 LINKING:
-- Use link/unlink to create bidirectional connections between atoms
-- Links are always bidirectional (A links to B means B links to A)
+- Use link/unlink to create directed connections between atoms
+- Links are directed: A links to B does NOT mean B links to A
 - Cross-project links supported within same org: "other-project/K-000001"
 - Same-project links use short form: "K-000001"
 
@@ -109,7 +109,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Create a bidirectional link between two atoms. Both atoms must exist in the same org. Links are stored relative to each atom's project."
+        description = "Create a directed link from source atom to target atom. Both atoms must exist in the same org. Link is stored in source atom only."
     )]
     async fn link(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
         let result = link(params.0).map_err(to_mcp_error)?;
@@ -119,7 +119,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Remove a bidirectional link between two atoms. Both atoms must exist in the same org."
+        description = "Remove a directed link from source atom to target atom. Target atom need not exist (allows cleaning up dangling links)."
     )]
     async fn unlink(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
         let result = unlink(params.0).map_err(to_mcp_error)?;

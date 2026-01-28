@@ -96,7 +96,7 @@ fn get_context_or_override(
 // Link tool
 // ============================================================================
 
-/// Create a bidirectional link between two atoms.
+/// Create a directed link from source atom to target atom.
 pub fn link(req: LinkRequest) -> Result<LinkResponse, AtlasError> {
     let ctx = get_context_or_override(&req.org, &req.project)?;
 
@@ -111,30 +111,20 @@ pub fn link(req: LinkRequest) -> Result<LinkResponse, AtlasError> {
         ));
     }
 
-    // Acquire locks on both projects (in sorted order to prevent deadlock)
-    let mut projects = vec![&source_project, &target_project];
-    projects.sort();
-    projects.dedup();
+    // Only lock source project (we only modify source atom)
+    let _lock = ProjectLock::acquire(&ctx.org, &source_project)?;
 
-    let _locks: Vec<_> = projects
-        .iter()
-        .map(|p| ProjectLock::acquire(&ctx.org, p))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    // Load both atoms (validates they exist)
+    // Load source atom for modification
     let mut source_atom = read_atom(&ctx.org, &source_project, &source_id)?;
-    let mut target_atom = read_atom(&ctx.org, &target_project, &target_id)?;
 
-    // Format links relative to each atom's project
+    // Validate target exists (read-only check)
+    let _ = read_atom(&ctx.org, &target_project, &target_id)?;
+
+    // Format link relative to source atom's project
     let link_to_target = format_link(&source_project, &target_project, &target_id);
-    let link_to_source = format_link(&target_project, &source_project, &source_id);
 
-    // Check if link already exists (both directions)
-    let source_has_link = source_atom.links.contains(&link_to_target);
-    let target_has_link = target_atom.links.contains(&link_to_source);
-
-    if source_has_link && target_has_link {
-        // Link already exists in both directions
+    // Check if link already exists
+    if source_atom.links.contains(&link_to_target) {
         return Ok(LinkResponse {
             source: format!("{}/{}", source_project, source_id),
             target: format!("{}/{}", target_project, target_id),
@@ -142,27 +132,15 @@ pub fn link(req: LinkRequest) -> Result<LinkResponse, AtlasError> {
         });
     }
 
-    // Add links where missing
-    let mut modified = false;
-
-    if !source_has_link {
-        source_atom.links.push(link_to_target);
-        source_atom.updated_at = Utc::now().date_naive();
-        write_atom(&ctx.org, &source_project, &source_atom)?;
-        modified = true;
-    }
-
-    if !target_has_link {
-        target_atom.links.push(link_to_source);
-        target_atom.updated_at = Utc::now().date_naive();
-        write_atom(&ctx.org, &target_project, &target_atom)?;
-        modified = true;
-    }
+    // Add link to source atom
+    source_atom.links.push(link_to_target);
+    source_atom.updated_at = Utc::now().date_naive();
+    write_atom(&ctx.org, &source_project, &source_atom)?;
 
     Ok(LinkResponse {
         source: format!("{}/{}", source_project, source_id),
         target: format!("{}/{}", target_project, target_id),
-        created: modified,
+        created: true,
     })
 }
 
@@ -170,7 +148,7 @@ pub fn link(req: LinkRequest) -> Result<LinkResponse, AtlasError> {
 // Unlink tool
 // ============================================================================
 
-/// Remove a bidirectional link between two atoms.
+/// Remove a directed link from source atom to target atom.
 pub fn unlink(req: LinkRequest) -> Result<UnlinkResponse, AtlasError> {
     let ctx = get_context_or_override(&req.org, &req.project)?;
 
@@ -178,40 +156,25 @@ pub fn unlink(req: LinkRequest) -> Result<UnlinkResponse, AtlasError> {
     let (source_project, source_id) = parse_atom_ref(&req.source, &ctx.project);
     let (target_project, target_id) = parse_atom_ref(&req.target, &ctx.project);
 
-    // Acquire locks on both projects (in sorted order to prevent deadlock)
-    let mut projects = vec![&source_project, &target_project];
-    projects.sort();
-    projects.dedup();
+    // Only lock source project (we only modify source atom)
+    let _lock = ProjectLock::acquire(&ctx.org, &source_project)?;
 
-    let _locks: Vec<_> = projects
-        .iter()
-        .map(|p| ProjectLock::acquire(&ctx.org, p))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    // Load both atoms (validates they exist)
+    // Load source atom for modification
     let mut source_atom = read_atom(&ctx.org, &source_project, &source_id)?;
-    let mut target_atom = read_atom(&ctx.org, &target_project, &target_id)?;
 
-    // Format links relative to each atom's project
+    // Format link relative to source atom's project
+    // Note: No target validation - allows cleaning up dangling links if target was deleted
     let link_to_target = format_link(&source_project, &target_project, &target_id);
-    let link_to_source = format_link(&target_project, &source_project, &source_id);
 
-    // Remove links where present
-    let mut removed = false;
-
-    if let Some(pos) = source_atom.links.iter().position(|l| l == &link_to_target) {
+    // Remove link if present
+    let removed = if let Some(pos) = source_atom.links.iter().position(|l| l == &link_to_target) {
         source_atom.links.remove(pos);
         source_atom.updated_at = Utc::now().date_naive();
         write_atom(&ctx.org, &source_project, &source_atom)?;
-        removed = true;
-    }
-
-    if let Some(pos) = target_atom.links.iter().position(|l| l == &link_to_source) {
-        target_atom.links.remove(pos);
-        target_atom.updated_at = Utc::now().date_naive();
-        write_atom(&ctx.org, &target_project, &target_atom)?;
-        removed = true;
-    }
+        true
+    } else {
+        false
+    };
 
     Ok(UnlinkResponse {
         source: format!("{}/{}", source_project, source_id),
