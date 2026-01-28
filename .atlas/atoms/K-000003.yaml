@@ -1,0 +1,28 @@
+id: K-000003
+title: YAML Storage Format Decision
+type: decision
+confidence: high
+summary: Atoms stored as individual YAML files (K-XXXXXX.yaml) with a project-level index.yaml for fast searching. Chose YAML over JSON for human readability and editing.
+details: |-
+  Rationale:
+  - YAML is human-readable and editable without tools
+  - Individual atom files enable git-friendly diffs
+  - Index file (index.yaml) provides fast search without loading all atoms
+  - Index contains: id, title, type, confidence, tags for each atom
+  - Full atom content loaded on-demand via get_atom
+
+  Storage structure:
+  ~/.atlas/orgs/{org}/{project}/
+  ├── index.yaml        # Fast search index
+  └── atoms/
+      └── K-XXXXXX.yaml # Individual atoms
+tags:
+- storage
+- yaml
+- architecture
+- decision
+sources:
+- src/storage/atoms.rs
+- src/storage/index.rs
+- src/models/atom.rs
+updated_at: 2026-01-28

@@ -1,0 +1,37 @@
+id: K-000002
+title: MCP Server Implementation Pattern
+type: recipe
+confidence: high
+summary: 'Use rmcp crate with tool_router macro for implementing MCP servers. Define a struct implementing ServerHandler trait, annotate methods with #[tool] for MCP tools.'
+details: |-
+  Pattern:
+  1. Define server struct with ToolRouter<Self>
+  2. Use #[tool_router] impl block for tool methods
+  3. Each tool method takes Parameters<RequestType> and returns Result<CallToolResult, McpError>
+  4. Implement ServerHandler trait with get_info() returning ServerInfo
+  5. Use rmcp::ServiceExt for transport binding
+
+  Example from server.rs:
+  ```rust
+  #[tool_router]
+  impl AtlasServer {
+      #[tool(description = "...")]
+      async fn search(&self, params: Parameters<SearchRequest>) -> Result<CallToolResult, McpError> {
+          // implementation
+      }
+  }
+
+  #[rmcp::tool_handler]
+  impl rmcp::handler::server::ServerHandler for AtlasServer {
+      fn get_info(&self) -> ServerInfo { ... }
+  }
+  ```
+tags:
+- mcp
+- rmcp
+- server
+- pattern
+- rust
+sources:
+- src/server.rs
+updated_at: 2026-01-28

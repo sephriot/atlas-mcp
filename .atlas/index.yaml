@@ -1,0 +1,74 @@
+next_id: 9
+entries:
+- id: K-000001
+  title: Atlas MCP Project Overview
+  type: note
+  confidence: high
+  tags:
+  - overview
+  - architecture
+  - mcp
+  - rust
+- id: K-000002
+  title: MCP Server Implementation Pattern
+  type: recipe
+  confidence: high
+  tags:
+  - mcp
+  - rmcp
+  - server
+  - pattern
+  - rust
+- id: K-000003
+  title: YAML Storage Format Decision
+  type: decision
+  confidence: high
+  tags:
+  - storage
+  - yaml
+  - architecture
+  - decision
+- id: K-000004
+  title: Context Detection Requires Git Remote or Symlink
+  type: gotcha
+  confidence: high
+  tags:
+  - context
+  - git
+  - gotcha
+  - configuration
+- id: K-000005
+  title: File-Based Project Locking
+  type: recipe
+  confidence: high
+  tags:
+  - locking
+  - concurrency
+  - fs2
+  - pattern
+- id: K-000006
+  title: Search Scoring Algorithm
+  type: note
+  confidence: high
+  tags:
+  - search
+  - algorithm
+  - scoring
+- id: K-000007
+  title: CI Pipeline Configuration
+  type: note
+  confidence: high
+  tags:
+  - ci
+  - github-actions
+  - testing
+  - clippy
+- id: K-000008
+  title: Error Handling Pattern
+  type: recipe
+  confidence: high
+  tags:
+  - error-handling
+  - thiserror
+  - pattern
+  - rust

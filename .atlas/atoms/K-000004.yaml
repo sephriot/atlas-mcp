@@ -1,0 +1,29 @@
+id: K-000004
+title: Context Detection Requires Git Remote or Symlink
+type: gotcha
+confidence: high
+summary: Context detection falls back to 'global/{dirname}' if git remote is unavailable and no .knowledge symlink exists. For non-git projects, create a .knowledge symlink pointing to ~/.atlas/orgs/{org}/{project}.
+details: |-
+  Detection priority:
+  1. Git remote URL parsing (supports github, gitlab, etc.)
+  2. .knowledge symlink resolution
+  3. Fallback: global/{current_directory_name}
+
+  Supported git URL formats:
+  - git@github.com:org/project.git
+  - https://github.com/org/project.git
+  - git@gitlab.com:org/project.git
+
+  The ATLAS_CWD env var can override working directory for context detection.
+pitfalls:
+- Projects without git remote default to global namespace
+- Both org AND project must be specified together in API calls
+- ATLAS_CWD must be set before server starts
+tags:
+- context
+- git
+- gotcha
+- configuration
+sources:
+- src/context.rs
+updated_at: 2026-01-28

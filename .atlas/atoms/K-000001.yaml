@@ -1,0 +1,27 @@
+id: K-000001
+title: Atlas MCP Project Overview
+type: note
+confidence: high
+summary: Atlas MCP is a knowledge management server implementing the Model Context Protocol (MCP). It provides long-term memory for AI agents organized by org/project/atom hierarchy, with automatic context detection from git remotes.
+details: |-
+  Key features:
+  - Automatic org/project detection from git remote URL
+  - Hierarchical storage at ~/.atlas/orgs/{org}/{project}/atoms/
+  - YAML-based atom storage format
+  - 4 atom types: note, gotcha, recipe, decision
+  - 3 confidence levels: high, medium, low
+  - Cross-project linking within same org
+  - Dual transport: STDIO (default) and HTTP/SSE
+  - File-based locking for concurrent access safety
+
+  Tech stack: Rust, rmcp, tokio, serde, axum, chrono
+tags:
+- overview
+- architecture
+- mcp
+- rust
+sources:
+- README.md
+- src/main.rs
+- src/server.rs
+updated_at: 2026-01-28

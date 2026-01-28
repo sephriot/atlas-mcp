@@ -1,0 +1,30 @@
+id: K-000008
+title: Error Handling Pattern
+type: recipe
+confidence: high
+summary: Use thiserror for domain errors (AtlasError enum), anyhow for main/CLI. Convert domain errors to MCP errors at server boundary via to_mcp_error helper.
+details: |-
+  AtlasError variants:
+  - Io: std::io::Error (automatic From impl)
+  - Yaml: serde_yaml::Error (automatic From impl)
+  - Config: configuration issues
+  - Context: context detection failures
+  - Storage: storage operations
+  - NotFound: missing atoms
+  - Validation: input validation
+
+  Conversion at MCP boundary:
+  ```rust
+  fn to_mcp_error(e: AtlasError) -> McpError {
+      McpError::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+  }
+  ```
+tags:
+- error-handling
+- thiserror
+- pattern
+- rust
+sources:
+- src/error.rs
+- src/server.rs
+updated_at: 2026-01-28

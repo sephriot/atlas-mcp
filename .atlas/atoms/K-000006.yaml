@@ -1,0 +1,13 @@
+id: K-000006
+title: Search Scoring Algorithm
+type: note
+confidence: high
+summary: 'Search uses a weighted scoring system: title exact match (10pts), title contains (5pts), tag exact match (3pts), tag contains (1pt). Case-insensitive matching.'
+details: "Scoring breakdown per search term:\n- Title exact match: 10.0 points\n- Title contains term: 5.0 points  \n- Tag exact match: 3.0 points\n- Tag contains term: 1.0 point\n\nBehavior:\n- Empty query returns all atoms with score 1.0\n- Multiple terms accumulate scores\n- Results with 0 score are filtered out when query provided\n- Results sorted by score descending\n- Default limit: 20 results\n\nFilters applied before scoring:\n- types: filter by atom type\n- confidence: filter by confidence level\n- tags: match any provided tag (OR logic)"
+tags:
+- search
+- algorithm
+- scoring
+sources:
+- src/tools/search.rs
+updated_at: 2026-01-28

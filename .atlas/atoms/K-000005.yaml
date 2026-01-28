@@ -1,0 +1,26 @@
+id: K-000005
+title: File-Based Project Locking
+type: recipe
+confidence: high
+summary: Uses fs2 crate for exclusive file locking on .lock file in project directory. Lock is RAII-based - automatically released when ProjectLock drops.
+details: |-
+  Implementation:
+  - Lock file: ~/.atlas/orgs/{org}/{project}/.lock
+  - Uses fs2::FileExt::lock_exclusive() for cross-platform locking
+  - RAII pattern: lock released when struct drops
+  - All read/write operations acquire lock first
+
+  Usage pattern:
+  ```rust
+  let _lock = ProjectLock::acquire(&org, &project)?;
+  // ... do operations ...
+  // lock auto-releases on scope exit
+  ```
+tags:
+- locking
+- concurrency
+- fs2
+- pattern
+sources:
+- src/locking.rs
+updated_at: 2026-01-28

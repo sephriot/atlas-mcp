@@ -1,0 +1,21 @@
+id: K-000007
+title: CI Pipeline Configuration
+type: note
+confidence: high
+summary: 'GitHub Actions CI runs on push/PR to main: rustfmt check, clippy with -D warnings, cargo test, and release build. Uses Cargo caching for faster builds.'
+details: |-
+  Pipeline steps:
+  1. cargo fmt --check (formatting)
+  2. cargo clippy -- -D warnings (linting, warnings as errors)
+  3. cargo test (unit tests)
+  4. cargo build --release (release build)
+
+  Caching: ~/.cargo/{bin,registry,git} and target/ cached by Cargo.lock hash
+tags:
+- ci
+- github-actions
+- testing
+- clippy
+sources:
+- .github/workflows/ci.yml
+updated_at: 2026-01-28
