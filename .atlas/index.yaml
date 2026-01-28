@@ -1,4 +1,4 @@
-next_id: 9
+next_id: 10
 entries:
 - id: K-000001
   title: Atlas MCP Project Overview
@@ -93,3 +93,15 @@ entries:
   sources:
   - src/error.rs
   - src/server.rs
+- id: K-000009
+  title: std::fs::rename fails across filesystems (EXDEV)
+  type: gotcha
+  confidence: high
+  tags:
+  - rust
+  - filesystem
+  - rename
+  - EXDEV
+  - cross-device
+  sources:
+  - src/tools/atoms.rs

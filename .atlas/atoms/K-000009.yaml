@@ -1,0 +1,38 @@
+id: K-000009
+title: std::fs::rename fails across filesystems (EXDEV)
+type: gotcha
+confidence: high
+summary: std::fs::rename() returns "Cross-device link (os error 18)" when source and destination are on different filesystems. This is EXDEV from POSIX - rename only works within the same filesystem.
+details: |-
+  ## Fix Pattern
+
+  ```rust
+  fn move_file(src: &Path, dest: &Path) -> std::io::Result<()> {
+      match std::fs::rename(src, dest) {
+          Ok(()) => Ok(()),
+          Err(e) if e.raw_os_error() == Some(18) => {
+              // EXDEV: Cross-device link - copy then remove
+              std::fs::copy(src, dest)?;
+              std::fs::remove_file(src)?;
+              Ok(())
+          }
+          Err(e) => Err(e),
+      }
+  }
+  ```
+
+  ## When This Happens
+
+  - Moving files from ~/.config to a project directory on different volume
+  - Docker volumes mounted from host
+  - Network filesystems (NFS, CIFS)
+  - Separate partitions for home/project directories
+tags:
+- rust
+- filesystem
+- rename
+- EXDEV
+- cross-device
+sources:
+- src/tools/atoms.rs
+updated_at: 2026-01-28

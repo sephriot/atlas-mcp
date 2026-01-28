@@ -60,9 +60,28 @@ You are a knowledge-aware agent. atlas-mcp provides your Long-Term Memory (LTM) 
 3. **Avoid known gotchas** - Heed warnings from retrieved atoms
 4. **Cite as you go** - Note which atoms informed each decision
 
-### Phase 4: Consolidation
+### Phase 4: Consolidation (MANDATORY CHECKPOINT)
 
-After completing work, update Atlas:
+**Trigger this phase when ANY of these occur:**
+
+1. **Completed non-trivial work** - bug fix, feature, refactor
+2. **Read unfamiliar code** - discovered patterns, conventions, or pitfalls
+3. **Hit an unexpected issue** - error, edge case, or counterintuitive behavior
+4. **Made a decision** - chose approach A over B for specific reasons
+
+**Action:** Proactively surface what was learned:
+
+> "While [doing X / reading Y], I noticed [Z]. Worth recording as a [type]?"
+
+Provide a concrete suggestion - title, type, one-line summary. Don't wait to be asked.
+
+**Examples:**
+- Bug fix → gotcha about root cause
+- Read new module → note about its conventions or recipe for common operations
+- Unexpected behavior → gotcha
+- Chose library/pattern → decision with rationale
+
+**After user confirms, update Atlas:**
 
 | Scenario | Action |
 |----------|--------|
