@@ -268,7 +268,7 @@ pub fn enable_local_storage(
                 let src = entry.path();
                 let dest = repo_atoms_path.join(entry.file_name());
                 if !dest.exists() {
-                    std::fs::rename(&src, &dest)?;
+                    move_file(&src, &dest)?;
                     atoms_migrated += 1;
                 }
             }
@@ -466,5 +466,19 @@ fn get_context_or_override(
             "Both org and project must be specified together".into(),
         )),
         (None, None) => detect_context(),
+    }
+}
+
+/// Move a file, falling back to copy+delete if rename fails across filesystems.
+fn move_file(src: &std::path::Path, dest: &std::path::Path) -> std::io::Result<()> {
+    match std::fs::rename(src, dest) {
+        Ok(()) => Ok(()),
+        Err(e) if e.raw_os_error() == Some(18) => {
+            // EXDEV (18): Cross-device link - copy then remove
+            std::fs::copy(src, dest)?;
+            std::fs::remove_file(src)?;
+            Ok(())
+        }
+        Err(e) => Err(e),
     }
 }
