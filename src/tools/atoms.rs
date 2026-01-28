@@ -3,15 +3,18 @@ use std::os::unix::fs::symlink;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use rmcp::model::Extensions;
+
 use crate::config::{get_orgs_path, get_project_path};
-use crate::context::{detect_context, ProjectContext};
+use crate::context::{
+    detect_context, detect_context_with_headers, ProjectContext, HEADER_ATLAS_ORG,
+    HEADER_ATLAS_PROJECT,
+};
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
 use crate::models::{Atom, AtomType, Confidence, IndexEntry};
-use crate::storage::{
-    delete_atom_file, ensure_project_exists, load_index, read_atom as storage_read_atom,
-    save_index,
-};
+use crate::serde_helpers::deserialize_optional_usize;
+use crate::storage::{delete_atom_file, load_index, read_atom as storage_read_atom, save_index};
 
 // ============================================================================
 // get_atom
@@ -61,7 +64,7 @@ pub struct ListAtomsRequest {
     pub confidence: Option<Confidence>,
 
     /// Maximum number of results (default: 50)
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_usize")]
     pub limit: Option<usize>,
 
     /// Override org (defaults to detected)
@@ -194,28 +197,22 @@ pub fn delete_atom(req: DeleteAtomRequest) -> Result<DeleteResult, AtlasError> {
 // ============================================================================
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub struct InitProjectRequest {
+pub struct EnableLocalStorageRequest {
     /// Organization name
     pub org: String,
 
     /// Project name
     pub project: String,
-
-    /// Create .atlas/ directory in current repo with reverse symlink from ~/.atlas.
-    /// This makes atoms version-controllable via git.
-    #[serde(default)]
-    pub create_symlink: Option<bool>,
 }
 
-/// Init result.
+/// Enable local storage result.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
-pub struct InitResult {
-    /// Path to the project storage (either ~/.atlas/... or {cwd}/.atlas)
+pub struct EnableLocalStorageResult {
+    /// Path to the local .atlas directory
     pub path: String,
-    /// Whether a symlink was created from ~/.atlas to repo
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// Whether a new symlink was created from ~/.atlas to the local directory
     pub symlink_created: bool,
-    /// Number of atoms migrated from central storage to repo
+    /// Number of atoms migrated from central storage to local
     #[serde(skip_serializing_if = "is_zero")]
     pub atoms_migrated: usize,
 }
@@ -224,104 +221,100 @@ fn is_zero(n: &usize) -> bool {
     *n == 0
 }
 
-/// Initialize a new project.
+/// Enable local storage for a project.
 ///
-/// Without create_symlink: creates project in ~/.atlas/orgs/{org}/{project}
-/// With create_symlink: creates .atlas/ in current dir with reverse symlink from ~/.atlas
-pub fn init_project(req: InitProjectRequest) -> Result<InitResult, AtlasError> {
-    let cwd = std::env::current_dir()?;
+/// Creates .atlas/ in project root with reverse symlink from ~/.atlas.
+/// This makes atoms version-controllable via git.
+///
+/// Project root is determined by (in order):
+/// 1. ATLAS_PROJECT_ROOT env var (set via --project-root CLI arg)
+/// 2. Current working directory
+pub fn enable_local_storage(
+    req: EnableLocalStorageRequest,
+) -> Result<EnableLocalStorageResult, AtlasError> {
+    let project_root = get_project_root()?;
     let mut symlink_created = false;
     let mut atoms_migrated = 0usize;
 
-    let project_path = if req.create_symlink.unwrap_or(false) {
-        // Repo storage mode: create .atlas in cwd and symlink from ~/.atlas
-        let repo_atlas_path = cwd.join(".atlas");
-        let repo_atoms_path = repo_atlas_path.join("atoms");
-        let central_project_path = get_project_path(&req.org, &req.project)?;
+    let repo_atlas_path = project_root.join(".atlas");
+    let repo_atoms_path = repo_atlas_path.join("atoms");
+    let central_project_path = get_project_path(&req.org, &req.project)?;
 
-        // Create .atlas/atoms in repo
-        std::fs::create_dir_all(&repo_atoms_path)?;
+    // Create .atlas/atoms in project root
+    std::fs::create_dir_all(&repo_atoms_path)?;
 
-        // Create index.yaml if it doesn't exist
-        let index_path = repo_atlas_path.join("index.yaml");
-        if !index_path.exists() {
-            let index = crate::models::Index::new();
-            let content = serde_yaml::to_string(&index)?;
-            std::fs::write(&index_path, content)?;
+    // Create index.yaml if it doesn't exist
+    let index_path = repo_atlas_path.join("index.yaml");
+    if !index_path.exists() {
+        let index = crate::models::Index::new();
+        let content = serde_yaml::to_string(&index)?;
+        std::fs::write(&index_path, content)?;
+    }
+
+    // Ensure parent directory exists for central symlink
+    if let Some(parent) = central_project_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Migrate existing atoms from central storage to local
+    if central_project_path.exists() && !central_project_path.is_symlink() {
+        let central_atoms_path = central_project_path.join("atoms");
+        let central_index_path = central_project_path.join("index.yaml");
+
+        // Move atoms if they exist
+        if central_atoms_path.exists() {
+            for entry in std::fs::read_dir(&central_atoms_path)? {
+                let entry = entry?;
+                let src = entry.path();
+                let dest = repo_atoms_path.join(entry.file_name());
+                if !dest.exists() {
+                    std::fs::rename(&src, &dest)?;
+                    atoms_migrated += 1;
+                }
+            }
         }
 
-        // Ensure parent directory exists for central symlink
-        if let Some(parent) = central_project_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+        // Merge index: prefer central index entries for migrated atoms
+        if central_index_path.exists() {
+            let central_content = std::fs::read_to_string(&central_index_path)?;
+            let central_index: crate::models::Index = serde_yaml::from_str(&central_content)?;
 
-        // Migrate existing atoms from central storage to repo
-        if central_project_path.exists() && !central_project_path.is_symlink() {
-            let central_atoms_path = central_project_path.join("atoms");
-            let central_index_path = central_project_path.join("index.yaml");
+            let repo_index_path = repo_atlas_path.join("index.yaml");
+            let mut repo_index = if repo_index_path.exists() {
+                let content = std::fs::read_to_string(&repo_index_path)?;
+                serde_yaml::from_str(&content)?
+            } else {
+                crate::models::Index::new()
+            };
 
-            // Move atoms if they exist
-            if central_atoms_path.exists() {
-                for entry in std::fs::read_dir(&central_atoms_path)? {
-                    let entry = entry?;
-                    let src = entry.path();
-                    let dest = repo_atoms_path.join(entry.file_name());
-                    if !dest.exists() {
-                        std::fs::rename(&src, &dest)?;
-                        atoms_migrated += 1;
-                    }
+            // Add central entries that don't exist in local
+            for entry in central_index.entries {
+                if !repo_index.entries.iter().any(|e| e.id == entry.id) {
+                    repo_index.entries.push(entry);
                 }
             }
 
-            // Merge index: prefer central index entries for migrated atoms
-            if central_index_path.exists() {
-                let central_content = std::fs::read_to_string(&central_index_path)?;
-                let central_index: crate::models::Index = serde_yaml::from_str(&central_content)?;
-
-                let repo_index_path = repo_atlas_path.join("index.yaml");
-                let mut repo_index = if repo_index_path.exists() {
-                    let content = std::fs::read_to_string(&repo_index_path)?;
-                    serde_yaml::from_str(&content)?
-                } else {
-                    crate::models::Index::new()
-                };
-
-                // Add central entries that don't exist in repo
-                for entry in central_index.entries {
-                    if !repo_index.entries.iter().any(|e| e.id == entry.id) {
-                        repo_index.entries.push(entry);
-                    }
-                }
-
-                // Update next_id if central has higher
-                if central_index.next_id > repo_index.next_id {
-                    repo_index.next_id = central_index.next_id;
-                }
-
-                let content = serde_yaml::to_string(&repo_index)?;
-                std::fs::write(&repo_index_path, content)?;
+            // Update next_id if central has higher
+            if central_index.next_id > repo_index.next_id {
+                repo_index.next_id = central_index.next_id;
             }
 
-            // Remove central directory after migration
-            std::fs::remove_dir_all(&central_project_path)?;
+            let content = serde_yaml::to_string(&repo_index)?;
+            std::fs::write(&repo_index_path, content)?;
         }
 
-        // Create symlink: ~/.atlas/orgs/{org}/{project} -> {cwd}/.atlas
-        if !central_project_path.exists() {
-            symlink(&repo_atlas_path, &central_project_path)?;
-            symlink_created = true;
-        }
+        // Remove central directory after migration
+        std::fs::remove_dir_all(&central_project_path)?;
+    }
 
-        repo_atlas_path
-    } else {
-        // Standard mode: create in ~/.atlas
-        let _lock = ProjectLock::acquire(&req.org, &req.project)?;
-        ensure_project_exists(&req.org, &req.project)?;
-        get_project_path(&req.org, &req.project)?
-    };
+    // Create symlink: ~/.atlas/orgs/{org}/{project} -> {project_root}/.atlas
+    if !central_project_path.exists() {
+        symlink(&repo_atlas_path, &central_project_path)?;
+        symlink_created = true;
+    }
 
-    Ok(InitResult {
-        path: project_path.to_string_lossy().to_string(),
+    Ok(EnableLocalStorageResult {
+        path: repo_atlas_path.to_string_lossy().to_string(),
         symlink_created,
         atoms_migrated,
     })
@@ -396,8 +389,10 @@ pub struct ContextInfo {
 }
 
 /// Get detected project context.
-pub fn get_context() -> Result<ContextInfo, AtlasError> {
-    let ctx = detect_context()?;
+///
+/// In HTTP mode, extracts X-Atlas-Org and X-Atlas-Project headers from request.
+pub fn get_context(extensions: Extensions) -> Result<ContextInfo, AtlasError> {
+    let ctx = detect_context_from_extensions(&extensions)?;
     let cwd = std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
@@ -409,9 +404,46 @@ pub fn get_context() -> Result<ContextInfo, AtlasError> {
     })
 }
 
+/// Extract context from Extensions, checking HTTP headers if available.
+fn detect_context_from_extensions(extensions: &Extensions) -> Result<ProjectContext, AtlasError> {
+    // Try to extract HTTP headers if running in HTTP mode
+    if let Some(parts) = extensions.get::<http::request::Parts>() {
+        let org = parts
+            .headers
+            .get(HEADER_ATLAS_ORG)
+            .and_then(|v| v.to_str().ok());
+        let project = parts
+            .headers
+            .get(HEADER_ATLAS_PROJECT)
+            .and_then(|v| v.to_str().ok());
+
+        return detect_context_with_headers(org, project);
+    }
+
+    // No HTTP parts available (stdio mode), use standard detection
+    detect_context()
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/// Get project root directory for repo storage mode.
+///
+/// Returns ATLAS_PROJECT_ROOT env var if set, otherwise current directory.
+fn get_project_root() -> Result<std::path::PathBuf, AtlasError> {
+    if let Ok(path) = std::env::var("ATLAS_PROJECT_ROOT") {
+        let path = std::path::PathBuf::from(path);
+        if !path.exists() {
+            return Err(AtlasError::Validation(format!(
+                "Project root does not exist: {}",
+                path.display()
+            )));
+        }
+        return Ok(path);
+    }
+    std::env::current_dir().map_err(|e| AtlasError::Context(format!("Failed to get CWD: {}", e)))
+}
 
 /// Parse ID reference: "K-000001" or "project/K-000001"
 fn parse_id_reference(id: &str, default_project: &str) -> (String, String) {

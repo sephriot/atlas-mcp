@@ -6,7 +6,7 @@ Centralized knowledge management server implementing the Model Context Protocol 
 
 - **Automatic context detection** - Extracts org/project from git remote URL
 - **Hierarchical organization** - Knowledge stored as `~/.atlas/orgs/{org}/{project}/atoms/`
-- **Version-controlled storage** - Store atoms in your repo with `init --create_symlink`
+- **Version-controlled storage** - Store atoms in your repo with `enable_local_storage`
 - **Cross-project links** - Reference atoms across projects within the same org
 - **Simple atom model** - 4 types: note, gotcha, recipe, decision
 - **Dual transport** - STDIO (default) or HTTP/SSE
@@ -31,6 +31,22 @@ cargo build --release
 atlas-mcp
 ```
 
+### With explicit org/project
+
+When the MCP client can't detect git context (e.g., sandboxed environments):
+
+```bash
+atlas-mcp --org my-company --project my-service
+```
+
+### With project root for local storage
+
+Specify where `.atlas/` should be created when using `enable_local_storage`:
+
+```bash
+atlas-mcp --org my-company --project my-service --project-root /path/to/repo
+```
+
 ### Custom storage path
 
 ```bash
@@ -43,6 +59,12 @@ atlas-mcp --storage /path/to/knowledge
 atlas-mcp --http 3000
 ```
 
+In HTTP mode, clients set context via headers on each request:
+- `X-Atlas-Org: my-company`
+- `X-Atlas-Project: my-service`
+
+Note: The `enable_local_storage` tool is not available in HTTP mode (local filesystem access required).
+
 ## MCP Configuration
 
 ### Claude Code
@@ -54,6 +76,36 @@ Add to `~/.claude/claude_desktop_config.json`:
   "mcpServers": {
     "atlas": {
       "command": "/path/to/atlas-mcp"
+    }
+  }
+}
+```
+
+### With explicit org/project (recommended for sandboxed clients)
+
+```json
+{
+  "mcpServers": {
+    "atlas": {
+      "command": "/path/to/atlas-mcp",
+      "args": ["--org", "my-company", "--project", "my-service"]
+    }
+  }
+}
+```
+
+### With project root for local storage
+
+```json
+{
+  "mcpServers": {
+    "atlas": {
+      "command": "/path/to/atlas-mcp",
+      "args": [
+        "--org", "my-company",
+        "--project", "my-service",
+        "--project-root", "/path/to/repo"
+      ]
     }
   }
 }
@@ -72,7 +124,7 @@ Add to `~/.claude/claude_desktop_config.json`:
 }
 ```
 
-### With custom working directory
+### With custom working directory (legacy)
 
 ```json
 {
@@ -96,7 +148,7 @@ Add to `~/.claude/claude_desktop_config.json`:
 | `get_atom` | Get full atom content by ID |
 | `list_atoms` | List atoms with optional filtering |
 | `delete_atom` | Delete an atom |
-| `init` | Initialize a new org/project |
+| `enable_local_storage` | Enable version-controlled storage in project root (stdio only) |
 | `list_projects` | List all projects across organizations |
 | `get_context` | Get detected org/project context |
 
@@ -127,10 +179,14 @@ updated_at: 2026-01-28
 
 ## Context Detection
 
-Atlas automatically detects the current project context:
+Atlas detects the current project context using the following priority:
 
-1. **Git remote** - Parses `git remote get-url origin` for org/project
-2. **Fallback** - Uses `global/{directory_name}`
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | HTTP headers | `X-Atlas-Org` and `X-Atlas-Project` (HTTP mode only) |
+| 2 | CLI args | `--org` and `--project` flags |
+| 3 | Git remote | Parses `git remote get-url origin` |
+| 4 | Fallback | Uses `global/{directory_name}` |
 
 ### Supported git URL formats
 
@@ -152,9 +208,9 @@ Atlas automatically detects the current project context:
 │               └── K-XXXXXX.yaml
 ```
 
-### Version-controlled (repo storage)
+### Version-controlled (local storage)
 
-Use `init` with `create_symlink: true` to store atoms in your repo:
+Use `enable_local_storage` to store atoms in your repo:
 
 ```
 {repo}/.atlas/
@@ -174,7 +230,10 @@ This allows:
 
 | Variable | Description |
 |----------|-------------|
-| `ATLAS_CWD` | Override working directory for context detection |
+| `ATLAS_ORG` | Override organization (set via `--org` CLI arg) |
+| `ATLAS_PROJECT` | Override project (set via `--project` CLI arg) |
+| `ATLAS_PROJECT_ROOT` | Project root for local storage (set via `--project-root` CLI arg) |
+| `ATLAS_CWD` | Override working directory for git context detection |
 | `ATLAS_STORAGE` | Override storage root (default: `~/.atlas`) |
 
 ## Development

@@ -97,6 +97,7 @@ dependencies = [
  "clap",
  "dirs",
  "fs2",
+ "http",
  "regex",
  "rmcp",
  "schemars",

@@ -1,12 +1,12 @@
 use rmcp::{
-    handler::server::tool::ToolRouter, handler::server::wrapper::Parameters, model::*,
-    tool, tool_router, ErrorData as McpError,
+    handler::server::tool::ToolRouter, handler::server::wrapper::Parameters, model::Extensions,
+    model::*, tool, tool_router, ErrorData as McpError,
 };
 
 use crate::tools::{
-    delete_atom, get_atom, get_context, init_project, list_atoms, list_projects, search, upsert,
-    DeleteAtomRequest, GetAtomRequest, InitProjectRequest, ListAtomsRequest, SearchRequest,
-    UpsertRequest,
+    delete_atom, enable_local_storage, get_atom, get_context, list_atoms, list_projects, search,
+    upsert, DeleteAtomRequest, EnableLocalStorageRequest, GetAtomRequest, ListAtomsRequest,
+    SearchRequest, UpsertRequest,
 };
 
 const INSTRUCTIONS: &str = r#"Atlas MCP - Long-term memory for AI agents.
@@ -36,34 +36,39 @@ pub struct AtlasServer {
 #[tool_router]
 impl AtlasServer {
     pub fn new() -> Self {
-        Self {
-            tool_router: Self::tool_router(),
+        let mut tool_router = Self::tool_router();
+
+        // Remove enable_local_storage tool in HTTP mode (symlinks don't make sense remotely)
+        if std::env::var("ATLAS_HTTP_MODE").is_ok() {
+            tool_router.remove_route("enable_local_storage");
         }
+
+        Self { tool_router }
     }
 
-    #[tool(description = "Search knowledge atoms by title, tags, type, and confidence. Returns matching atoms with relevance scores.")]
-    async fn search(
-        &self,
-        params: Parameters<SearchRequest>,
-    ) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Search knowledge atoms by title, tags, type, and confidence. Returns matching atoms with relevance scores."
+    )]
+    async fn search(&self, params: Parameters<SearchRequest>) -> Result<CallToolResult, McpError> {
         let results = search(params.0).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&results).unwrap_or_default(),
         )]))
     }
 
-    #[tool(description = "Create or update a knowledge atom. Provide id to update existing, omit for new atom.")]
-    async fn upsert(
-        &self,
-        params: Parameters<UpsertRequest>,
-    ) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Create or update a knowledge atom. Provide id to update existing, omit for new atom."
+    )]
+    async fn upsert(&self, params: Parameters<UpsertRequest>) -> Result<CallToolResult, McpError> {
         let result = upsert(params.0).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&result).unwrap_or_default(),
         )]))
     }
 
-    #[tool(description = "Get full atom content by ID. Supports cross-project within org using project/id format.")]
+    #[tool(
+        description = "Get full atom content by ID. Supports cross-project within org using project/id format."
+    )]
     async fn get_atom(
         &self,
         params: Parameters<GetAtomRequest>,
@@ -96,12 +101,14 @@ impl AtlasServer {
         )]))
     }
 
-    #[tool(description = "Initialize a new project. Creates org/project directory structure and optionally a .knowledge symlink.")]
-    async fn init(
+    #[tool(
+        description = "Enable local storage for a project. Creates .atlas/ in project root and symlinks from ~/.atlas, making atoms version-controllable via git."
+    )]
+    async fn enable_local_storage(
         &self,
-        params: Parameters<InitProjectRequest>,
+        params: Parameters<EnableLocalStorageRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let result = init_project(params.0).map_err(to_mcp_error)?;
+        let result = enable_local_storage(params.0).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&result).unwrap_or_default(),
         )]))
@@ -115,9 +122,11 @@ impl AtlasServer {
         )]))
     }
 
-    #[tool(description = "Get detected project context (org, project, cwd) based on git remote or .knowledge symlink.")]
-    async fn get_context(&self) -> Result<CallToolResult, McpError> {
-        let ctx = get_context().map_err(to_mcp_error)?;
+    #[tool(
+        description = "Get detected project context (org, project, cwd). In HTTP mode, use X-Atlas-Org and X-Atlas-Project headers to override."
+    )]
+    async fn get_context(&self, extensions: Extensions) -> Result<CallToolResult, McpError> {
+        let ctx = get_context(extensions).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&ctx).unwrap_or_default(),
         )]))
@@ -135,9 +144,7 @@ impl rmcp::handler::server::ServerHandler for AtlasServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             protocol_version: ProtocolVersion::LATEST,
-            capabilities: ServerCapabilities::builder()
-                .enable_tools()
-                .build(),
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation {
                 name: "atlas-mcp".into(),
                 title: Some("Atlas MCP".into()),

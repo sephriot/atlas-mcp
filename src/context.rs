@@ -5,6 +5,11 @@ use regex::Regex;
 
 use crate::error::AtlasError;
 
+/// HTTP header for org override
+pub const HEADER_ATLAS_ORG: &str = "x-atlas-org";
+/// HTTP header for project override
+pub const HEADER_ATLAS_PROJECT: &str = "x-atlas-project";
+
 /// Detected project context.
 #[derive(Debug, Clone)]
 pub struct ProjectContext {
@@ -19,7 +24,36 @@ impl ProjectContext {
 }
 
 /// Detect project context from the current working directory.
+///
+/// Detection priority:
+/// 1. ATLAS_ORG + ATLAS_PROJECT env vars (explicit configuration via CLI)
+/// 2. Git remote URL parsing
+/// 3. Fallback: global/{current_directory_name}
 pub fn detect_context() -> Result<ProjectContext, AtlasError> {
+    detect_context_with_headers(None, None)
+}
+
+/// Detect project context with optional HTTP header overrides.
+///
+/// Detection priority:
+/// 1. HTTP headers (x-atlas-org, x-atlas-project) - for HTTP mode per-session context
+/// 2. ATLAS_ORG + ATLAS_PROJECT env vars (explicit configuration via CLI)
+/// 3. Git remote URL parsing
+/// 4. Fallback: global/{current_directory_name}
+pub fn detect_context_with_headers(
+    header_org: Option<&str>,
+    header_project: Option<&str>,
+) -> Result<ProjectContext, AtlasError> {
+    // Check for HTTP header overrides first (per-session in HTTP mode)
+    if let (Some(org), Some(project)) = (header_org, header_project) {
+        return Ok(ProjectContext::new(org.to_string(), project.to_string()));
+    }
+
+    // Check for explicit env var configuration (CLI args)
+    if let (Ok(org), Ok(project)) = (std::env::var("ATLAS_ORG"), std::env::var("ATLAS_PROJECT")) {
+        return Ok(ProjectContext::new(org, project));
+    }
+
     let cwd = get_working_directory()?;
     detect_context_from_path(&cwd)
 }
@@ -45,7 +79,10 @@ pub fn detect_context_from_path(path: &Path) -> Result<ProjectContext, AtlasErro
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
 
-    Ok(ProjectContext::new("global".to_string(), dir_name.to_string()))
+    Ok(ProjectContext::new(
+        "global".to_string(),
+        dir_name.to_string(),
+    ))
 }
 
 /// Try to get org/project from git remote URL.
@@ -151,5 +188,30 @@ mod tests {
         let ctx = ProjectContext::new("my-org".to_string(), "my-project".to_string());
         assert_eq!(ctx.org, "my-org");
         assert_eq!(ctx.project, "my-project");
+    }
+
+    #[test]
+    fn test_detect_context_from_env_vars() {
+        // Save original values
+        let orig_org = std::env::var("ATLAS_ORG").ok();
+        let orig_project = std::env::var("ATLAS_PROJECT").ok();
+
+        // Set test values
+        std::env::set_var("ATLAS_ORG", "test-org");
+        std::env::set_var("ATLAS_PROJECT", "test-project");
+
+        let ctx = detect_context().unwrap();
+        assert_eq!(ctx.org, "test-org");
+        assert_eq!(ctx.project, "test-project");
+
+        // Restore original values
+        match orig_org {
+            Some(v) => std::env::set_var("ATLAS_ORG", v),
+            None => std::env::remove_var("ATLAS_ORG"),
+        }
+        match orig_project {
+            Some(v) => std::env::set_var("ATLAS_PROJECT", v),
+            None => std::env::remove_var("ATLAS_PROJECT"),
+        }
     }
 }

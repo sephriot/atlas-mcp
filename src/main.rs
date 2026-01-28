@@ -3,6 +3,7 @@ mod context;
 mod error;
 mod locking;
 mod models;
+mod serde_helpers;
 mod server;
 mod storage;
 mod tools;
@@ -26,6 +27,18 @@ struct Args {
     /// Storage path for knowledge atoms (default: ~/.atlas)
     #[arg(long, short = 's')]
     storage: Option<PathBuf>,
+
+    /// Organization name (requires --project)
+    #[arg(long, requires = "project")]
+    org: Option<String>,
+
+    /// Project name (requires --org)
+    #[arg(long, requires = "org")]
+    project: Option<String>,
+
+    /// Project root directory for repo storage mode (where .atlas/ is created)
+    #[arg(long)]
+    project_root: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -37,9 +50,23 @@ async fn main() -> anyhow::Result<()> {
         std::env::set_var("ATLAS_STORAGE", path);
     }
 
+    // Set org/project context via env vars if provided via CLI
+    if let (Some(ref org), Some(ref project)) = (&args.org, &args.project) {
+        std::env::set_var("ATLAS_ORG", org);
+        std::env::set_var("ATLAS_PROJECT", project);
+    }
+
+    // Set project root for repo storage mode
+    if let Some(ref path) = args.project_root {
+        std::env::set_var("ATLAS_PROJECT_ROOT", path);
+    }
+
     let server = AtlasServer::new();
 
     if let Some(port) = args.http {
+        // Signal HTTP mode for tool filtering
+        std::env::set_var("ATLAS_HTTP_MODE", "1");
+        let server = AtlasServer::new(); // Recreate after setting env var
         run_http_server(server, port).await
     } else {
         run_stdio_server(server).await
@@ -54,10 +81,10 @@ async fn run_stdio_server(server: AtlasServer) -> anyhow::Result<()> {
 }
 
 async fn run_http_server(_server: AtlasServer, port: u16) -> anyhow::Result<()> {
+    use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
     use rmcp::transport::streamable_http_server::tower::{
         StreamableHttpServerConfig, StreamableHttpService,
     };
-    use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
     use std::net::SocketAddr;
     use std::sync::Arc;
     use tokio_util::sync::CancellationToken;
@@ -71,11 +98,7 @@ async fn run_http_server(_server: AtlasServer, port: u16) -> anyhow::Result<()> 
     };
 
     let session_manager = Arc::new(LocalSessionManager::default());
-    let service = StreamableHttpService::new(
-        || Ok(AtlasServer::new()),
-        session_manager,
-        config,
-    );
+    let service = StreamableHttpService::new(|| Ok(AtlasServer::new()), session_manager, config);
 
     let app = axum::Router::new().nest_service("/", service);
 
