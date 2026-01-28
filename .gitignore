@@ -14,3 +14,8 @@ Thumbs.db
 
 # Debug
 *.log
+
+# Claude Code - allow project settings to be committed
+!.claude/
+.claude/*
+!.claude/settings.json
