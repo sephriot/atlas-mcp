@@ -32,3 +32,19 @@ pub fn get_atoms_path(org: &str, project: &str) -> Result<PathBuf, AtlasError> {
 pub fn get_index_path(org: &str, project: &str) -> Result<PathBuf, AtlasError> {
     Ok(get_project_path(org, project)?.join("index.yaml"))
 }
+
+/// List all projects within an org.
+pub fn list_org_projects(org: &str) -> Result<Vec<String>, AtlasError> {
+    let org_path = get_orgs_path()?.join(org);
+    if !org_path.exists() {
+        return Ok(Vec::new());
+    }
+    let mut projects = Vec::new();
+    for entry in std::fs::read_dir(&org_path)? {
+        let entry = entry?;
+        if entry.path().is_dir() {
+            projects.push(entry.file_name().to_string_lossy().to_string());
+        }
+    }
+    Ok(projects)
+}

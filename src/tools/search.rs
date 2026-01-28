@@ -1,12 +1,16 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::config::list_org_projects;
 use crate::context::{detect_context, ProjectContext};
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
 use crate::models::{AtomType, Confidence, IndexEntry};
 use crate::serde_helpers::deserialize_optional_usize;
 use crate::storage::load_index;
+
+/// Score multiplier for results from other projects in the same org.
+const CROSS_PROJECT_SCORE_MULTIPLIER: f32 = 0.7;
 
 /// Search request parameters.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -38,6 +42,10 @@ pub struct SearchRequest {
     /// Override project (defaults to detected)
     #[serde(default)]
     pub project: Option<String>,
+
+    /// Search across all projects in the org (default: true)
+    #[serde(default)]
+    pub cross_project: Option<bool>,
 }
 
 /// Search result entry.
@@ -50,10 +58,13 @@ pub struct SearchResult {
     pub confidence: Confidence,
     pub tags: Vec<String>,
     pub score: f32,
+    /// Project name (only present for cross-project results)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
 }
 
-impl From<(&IndexEntry, f32)> for SearchResult {
-    fn from((entry, score): (&IndexEntry, f32)) -> Self {
+impl SearchResult {
+    fn from_entry(entry: &IndexEntry, score: f32, project: Option<String>) -> Self {
         Self {
             id: entry.id.clone(),
             title: entry.title.clone(),
@@ -61,6 +72,7 @@ impl From<(&IndexEntry, f32)> for SearchResult {
             confidence: entry.confidence,
             tags: entry.tags.clone(),
             score,
+            project,
         }
     }
 }
@@ -68,8 +80,7 @@ impl From<(&IndexEntry, f32)> for SearchResult {
 /// Search atoms in the index.
 pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
     let ctx = get_context_or_override(&req.org, &req.project)?;
-    let _lock = ProjectLock::acquire(&ctx.org, &ctx.project)?;
-    let index = load_index(&ctx.org, &ctx.project)?;
+    let cross_project = req.cross_project.unwrap_or(true);
 
     let limit = req.limit.unwrap_or(20);
     let query_terms = req
@@ -83,21 +94,40 @@ pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
         })
         .unwrap_or_default();
 
-    let mut results: Vec<(SearchResult, f32)> = index
-        .entries
-        .iter()
-        .filter_map(|entry| {
+    // Determine which projects to search
+    let projects_to_search: Vec<(String, bool)> = if cross_project {
+        let mut projects = vec![(ctx.project.clone(), true)]; // (project_name, is_current)
+        for proj in list_org_projects(&ctx.org)? {
+            if proj != ctx.project {
+                projects.push((proj, false));
+            }
+        }
+        projects
+    } else {
+        vec![(ctx.project.clone(), true)]
+    };
+
+    let mut results: Vec<(SearchResult, f32)> = Vec::new();
+
+    for (project_name, is_current_project) in projects_to_search {
+        let _lock = ProjectLock::acquire(&ctx.org, &project_name)?;
+        let index = match load_index(&ctx.org, &project_name) {
+            Ok(idx) => idx,
+            Err(_) => continue, // Skip projects with no index
+        };
+
+        for entry in &index.entries {
             // Apply type filter
             if let Some(ref types) = req.types {
                 if !types.contains(&entry.atom_type) {
-                    return None;
+                    continue;
                 }
             }
 
             // Apply confidence filter
             if let Some(ref conf) = req.confidence {
                 if &entry.confidence != conf {
-                    return None;
+                    continue;
                 }
             }
 
@@ -109,21 +139,32 @@ pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
                     .iter()
                     .any(|t| entry_tags_lower.contains(&t.to_lowercase()));
                 if !has_match {
-                    return None;
+                    continue;
                 }
             }
 
             // Calculate score
-            let score = calculate_score(entry, &query_terms);
+            let mut score = calculate_score(entry, &query_terms);
 
             // If query provided, require minimum score
             if !query_terms.is_empty() && score == 0.0 {
-                return None;
+                continue;
             }
 
-            Some((SearchResult::from((entry, score)), score))
-        })
-        .collect();
+            // Apply cross-project penalty
+            if !is_current_project {
+                score *= CROSS_PROJECT_SCORE_MULTIPLIER;
+            }
+
+            let project_field = if is_current_project {
+                None
+            } else {
+                Some(project_name.clone())
+            };
+
+            results.push((SearchResult::from_entry(entry, score, project_field), score));
+        }
+    }
 
     // Sort by score descending
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -326,9 +367,28 @@ mod tests {
     #[test]
     fn test_search_result_from_entry() {
         let entry = make_entry("K-000001", "Test", vec!["tag1"]);
-        let result = SearchResult::from((&entry, 5.0));
+        let result = SearchResult::from_entry(&entry, 5.0, None);
         assert_eq!(result.id, "K-000001");
         assert_eq!(result.title, "Test");
         assert_eq!(result.score, 5.0);
+        assert!(result.project.is_none());
+    }
+
+    #[test]
+    fn test_search_result_with_project() {
+        let entry = make_entry("K-000001", "Test", vec!["tag1"]);
+        let result = SearchResult::from_entry(&entry, 7.0, Some("other-project".to_string()));
+        assert_eq!(result.id, "K-000001");
+        assert_eq!(result.score, 7.0);
+        assert_eq!(result.project, Some("other-project".to_string()));
+    }
+
+    #[test]
+    fn test_cross_project_score_multiplier() {
+        // 10 point match from current project should beat 10 point match from other
+        let base_score = 10.0;
+        let cross_project_score = base_score * CROSS_PROJECT_SCORE_MULTIPLIER;
+        assert_eq!(cross_project_score, 7.0);
+        assert!(base_score > cross_project_score);
     }
 }

@@ -47,7 +47,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Search knowledge atoms by title, tags, type, and confidence. Returns matching atoms with relevance scores."
+        description = "Search knowledge atoms by title, tags, type, and confidence. Returns matching atoms with relevance scores. By default (cross_project: true), searches all projects in the org with current project results scoring higher (0.7x penalty for other projects)."
     )]
     async fn search(&self, params: Parameters<SearchRequest>) -> Result<CallToolResult, McpError> {
         let results = search(params.0).map_err(to_mcp_error)?;
