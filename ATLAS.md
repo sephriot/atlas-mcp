@@ -106,3 +106,4 @@ Always indicate your knowledge context:
 - Search costs nothing. Assumptions cost rework.
 - If you solved something non-trivial, record it.
 - Knowledge compounds. Each atom makes future work faster.
+- **Never read or modify `.atlas/` directly** - it is managed by atlas-mcp. Always use the provided tools.

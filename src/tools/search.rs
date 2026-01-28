@@ -5,6 +5,7 @@ use crate::context::{detect_context, ProjectContext};
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
 use crate::models::{AtomType, Confidence, IndexEntry};
+use crate::serde_helpers::deserialize_optional_usize;
 use crate::storage::load_index;
 
 /// Search request parameters.
@@ -27,7 +28,7 @@ pub struct SearchRequest {
     pub confidence: Option<Confidence>,
 
     /// Maximum number of results (default: 20)
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_usize")]
     pub limit: Option<usize>,
 
     /// Override org (defaults to detected)
@@ -205,7 +206,12 @@ mod tests {
         }
     }
 
-    fn make_entry_with_sources(id: &str, title: &str, tags: Vec<&str>, sources: Vec<&str>) -> IndexEntry {
+    fn make_entry_with_sources(
+        id: &str,
+        title: &str,
+        tags: Vec<&str>,
+        sources: Vec<&str>,
+    ) -> IndexEntry {
         IndexEntry {
             id: id.to_string(),
             title: title.to_string(),

@@ -36,7 +36,6 @@ impl ProjectLock {
             _lock_file: lock_file,
         })
     }
-
 }
 
 impl Drop for ProjectLock {

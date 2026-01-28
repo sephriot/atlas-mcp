@@ -122,7 +122,10 @@ mod tests {
     #[test]
     fn test_atom_type_serialization() {
         assert_eq!(serde_json::to_string(&AtomType::Note).unwrap(), "\"note\"");
-        assert_eq!(serde_json::to_string(&AtomType::Gotcha).unwrap(), "\"gotcha\"");
+        assert_eq!(
+            serde_json::to_string(&AtomType::Gotcha).unwrap(),
+            "\"gotcha\""
+        );
     }
 
     #[test]
@@ -143,8 +146,14 @@ mod tests {
 
     #[test]
     fn test_confidence_serialization() {
-        assert_eq!(serde_json::to_string(&Confidence::High).unwrap(), "\"high\"");
-        assert_eq!(serde_json::to_string(&Confidence::Medium).unwrap(), "\"medium\"");
+        assert_eq!(
+            serde_json::to_string(&Confidence::High).unwrap(),
+            "\"high\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Confidence::Medium).unwrap(),
+            "\"medium\""
+        );
     }
 
     #[test]

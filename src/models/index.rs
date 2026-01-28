@@ -119,7 +119,10 @@ mod tests {
 
     #[test]
     fn test_generate_id_formatting() {
-        let mut index = Index { next_id: 999999, entries: vec![] };
+        let mut index = Index {
+            next_id: 999999,
+            entries: vec![],
+        };
         assert_eq!(index.generate_id(), "K-999999");
         assert_eq!(index.generate_id(), "K-1000000");
     }
