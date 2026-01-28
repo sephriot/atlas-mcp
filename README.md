@@ -30,6 +30,12 @@ cargo build --release
 atlas-mcp
 ```
 
+### Custom storage path
+
+```bash
+atlas-mcp --storage /path/to/knowledge
+```
+
 ### HTTP/SSE
 
 ```bash
@@ -47,6 +53,19 @@ Add to `~/.claude/claude_desktop_config.json`:
   "mcpServers": {
     "atlas": {
       "command": "/path/to/atlas-mcp"
+    }
+  }
+}
+```
+
+### With custom storage path
+
+```json
+{
+  "mcpServers": {
+    "atlas": {
+      "command": "/path/to/atlas-mcp",
+      "args": ["--storage", "/path/to/knowledge"]
     }
   }
 }

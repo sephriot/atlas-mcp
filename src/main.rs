@@ -12,6 +12,8 @@ use rmcp::ServiceExt;
 
 use server::AtlasServer;
 
+use std::path::PathBuf;
+
 #[derive(Parser, Debug)]
 #[command(name = "atlas-mcp")]
 #[command(about = "Atlas MCP - Centralized knowledge management server")]
@@ -20,11 +22,20 @@ struct Args {
     /// Run HTTP/SSE server on specified port (localhost only)
     #[arg(long)]
     http: Option<u16>,
+
+    /// Storage path for knowledge atoms (default: ~/.atlas)
+    #[arg(long, short = 's')]
+    storage: Option<PathBuf>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+
+    // Set storage path via env var if provided via CLI
+    if let Some(ref path) = args.storage {
+        std::env::set_var("ATLAS_STORAGE", path);
+    }
 
     let server = AtlasServer::new();
 
