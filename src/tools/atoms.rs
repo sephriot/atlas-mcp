@@ -215,6 +215,13 @@ pub struct InitResult {
     /// Whether a symlink was created from ~/.atlas to repo
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub symlink_created: bool,
+    /// Number of atoms migrated from central storage to repo
+    #[serde(skip_serializing_if = "is_zero")]
+    pub atoms_migrated: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// Initialize a new project.
@@ -224,6 +231,7 @@ pub struct InitResult {
 pub fn init_project(req: InitProjectRequest) -> Result<InitResult, AtlasError> {
     let cwd = std::env::current_dir()?;
     let mut symlink_created = false;
+    let mut atoms_migrated = 0usize;
 
     let project_path = if req.create_symlink.unwrap_or(false) {
         // Repo storage mode: create .atlas in cwd and symlink from ~/.atlas
@@ -247,21 +255,54 @@ pub fn init_project(req: InitProjectRequest) -> Result<InitResult, AtlasError> {
             std::fs::create_dir_all(parent)?;
         }
 
-        // Remove existing central path if it's a directory (not symlink)
+        // Migrate existing atoms from central storage to repo
         if central_project_path.exists() && !central_project_path.is_symlink() {
-            // Check if it has atoms
-            let has_atoms = central_project_path.join("atoms").exists()
-                && std::fs::read_dir(central_project_path.join("atoms"))
-                    .map(|mut d| d.next().is_some())
-                    .unwrap_or(false);
+            let central_atoms_path = central_project_path.join("atoms");
+            let central_index_path = central_project_path.join("index.yaml");
 
-            if has_atoms {
-                return Err(AtlasError::Validation(format!(
-                    "Central storage at {} already has atoms. Move them to {}/atoms/ first.",
-                    central_project_path.display(),
-                    repo_atlas_path.display()
-                )));
+            // Move atoms if they exist
+            if central_atoms_path.exists() {
+                for entry in std::fs::read_dir(&central_atoms_path)? {
+                    let entry = entry?;
+                    let src = entry.path();
+                    let dest = repo_atoms_path.join(entry.file_name());
+                    if !dest.exists() {
+                        std::fs::rename(&src, &dest)?;
+                        atoms_migrated += 1;
+                    }
+                }
             }
+
+            // Merge index: prefer central index entries for migrated atoms
+            if central_index_path.exists() {
+                let central_content = std::fs::read_to_string(&central_index_path)?;
+                let central_index: crate::models::Index = serde_yaml::from_str(&central_content)?;
+
+                let repo_index_path = repo_atlas_path.join("index.yaml");
+                let mut repo_index = if repo_index_path.exists() {
+                    let content = std::fs::read_to_string(&repo_index_path)?;
+                    serde_yaml::from_str(&content)?
+                } else {
+                    crate::models::Index::new()
+                };
+
+                // Add central entries that don't exist in repo
+                for entry in central_index.entries {
+                    if !repo_index.entries.iter().any(|e| e.id == entry.id) {
+                        repo_index.entries.push(entry);
+                    }
+                }
+
+                // Update next_id if central has higher
+                if central_index.next_id > repo_index.next_id {
+                    repo_index.next_id = central_index.next_id;
+                }
+
+                let content = serde_yaml::to_string(&repo_index)?;
+                std::fs::write(&repo_index_path, content)?;
+            }
+
+            // Remove central directory after migration
             std::fs::remove_dir_all(&central_project_path)?;
         }
 
@@ -282,6 +323,7 @@ pub fn init_project(req: InitProjectRequest) -> Result<InitResult, AtlasError> {
     Ok(InitResult {
         path: project_path.to_string_lossy().to_string(),
         symlink_created,
+        atoms_migrated,
     })
 }
 
