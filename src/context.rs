@@ -3,7 +3,6 @@ use std::process::Command;
 
 use regex::Regex;
 
-use crate::config::get_orgs_path;
 use crate::error::AtlasError;
 
 /// Detected project context.
@@ -37,11 +36,6 @@ fn get_working_directory() -> Result<PathBuf, AtlasError> {
 pub fn detect_context_from_path(path: &Path) -> Result<ProjectContext, AtlasError> {
     // Try git remote first
     if let Some(ctx) = try_git_remote(path) {
-        return Ok(ctx);
-    }
-
-    // Try .knowledge symlink
-    if let Some(ctx) = try_knowledge_symlink(path)? {
         return Ok(ctx);
     }
 
@@ -97,30 +91,6 @@ fn parse_git_url(url: &str) -> Option<ProjectContext> {
     }
 
     None
-}
-
-/// Try to resolve context from .knowledge symlink.
-fn try_knowledge_symlink(path: &Path) -> Result<Option<ProjectContext>, AtlasError> {
-    let symlink_path = path.join(".knowledge");
-
-    if !symlink_path.is_symlink() {
-        return Ok(None);
-    }
-
-    let target = std::fs::read_link(&symlink_path)?;
-    let orgs_path = get_orgs_path()?;
-
-    // Check if target is under ~/.atlas/orgs/{org}/{project}
-    if let Ok(rel) = target.strip_prefix(&orgs_path) {
-        let components: Vec<_> = rel.components().collect();
-        if components.len() >= 2 {
-            let org = components[0].as_os_str().to_string_lossy().to_string();
-            let project = components[1].as_os_str().to_string_lossy().to_string();
-            return Ok(Some(ProjectContext::new(org, project)));
-        }
-    }
-
-    Ok(None)
 }
 
 #[cfg(test)]

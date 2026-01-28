@@ -201,7 +201,8 @@ pub struct InitProjectRequest {
     /// Project name
     pub project: String,
 
-    /// Create .knowledge symlink in current directory
+    /// Create .atlas/ directory in current repo with reverse symlink from ~/.atlas.
+    /// This makes atoms version-controllable via git.
     #[serde(default)]
     pub create_symlink: Option<bool>,
 }
@@ -209,28 +210,74 @@ pub struct InitProjectRequest {
 /// Init result.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct InitResult {
+    /// Path to the project storage (either ~/.atlas/... or {cwd}/.atlas)
     pub path: String,
+    /// Whether a symlink was created from ~/.atlas to repo
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub symlink_created: bool,
 }
 
 /// Initialize a new project.
+///
+/// Without create_symlink: creates project in ~/.atlas/orgs/{org}/{project}
+/// With create_symlink: creates .atlas/ in current dir with reverse symlink from ~/.atlas
 pub fn init_project(req: InitProjectRequest) -> Result<InitResult, AtlasError> {
-    let _lock = ProjectLock::acquire(&req.org, &req.project)?;
-
-    ensure_project_exists(&req.org, &req.project)?;
-
-    let project_path = get_project_path(&req.org, &req.project)?;
+    let cwd = std::env::current_dir()?;
     let mut symlink_created = false;
 
-    if req.create_symlink.unwrap_or(false) {
-        let cwd = std::env::current_dir()?;
-        let symlink_path = cwd.join(".knowledge");
+    let project_path = if req.create_symlink.unwrap_or(false) {
+        // Repo storage mode: create .atlas in cwd and symlink from ~/.atlas
+        let repo_atlas_path = cwd.join(".atlas");
+        let repo_atoms_path = repo_atlas_path.join("atoms");
+        let central_project_path = get_project_path(&req.org, &req.project)?;
 
-        if !symlink_path.exists() {
-            symlink(&project_path, &symlink_path)?;
+        // Create .atlas/atoms in repo
+        std::fs::create_dir_all(&repo_atoms_path)?;
+
+        // Create index.yaml if it doesn't exist
+        let index_path = repo_atlas_path.join("index.yaml");
+        if !index_path.exists() {
+            let index = crate::models::Index::new();
+            let content = serde_yaml::to_string(&index)?;
+            std::fs::write(&index_path, content)?;
+        }
+
+        // Ensure parent directory exists for central symlink
+        if let Some(parent) = central_project_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // Remove existing central path if it's a directory (not symlink)
+        if central_project_path.exists() && !central_project_path.is_symlink() {
+            // Check if it has atoms
+            let has_atoms = central_project_path.join("atoms").exists()
+                && std::fs::read_dir(central_project_path.join("atoms"))
+                    .map(|mut d| d.next().is_some())
+                    .unwrap_or(false);
+
+            if has_atoms {
+                return Err(AtlasError::Validation(format!(
+                    "Central storage at {} already has atoms. Move them to {}/atoms/ first.",
+                    central_project_path.display(),
+                    repo_atlas_path.display()
+                )));
+            }
+            std::fs::remove_dir_all(&central_project_path)?;
+        }
+
+        // Create symlink: ~/.atlas/orgs/{org}/{project} -> {cwd}/.atlas
+        if !central_project_path.exists() {
+            symlink(&repo_atlas_path, &central_project_path)?;
             symlink_created = true;
         }
-    }
+
+        repo_atlas_path
+    } else {
+        // Standard mode: create in ~/.atlas
+        let _lock = ProjectLock::acquire(&req.org, &req.project)?;
+        ensure_project_exists(&req.org, &req.project)?;
+        get_project_path(&req.org, &req.project)?
+    };
 
     Ok(InitResult {
         path: project_path.to_string_lossy().to_string(),

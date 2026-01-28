@@ -6,6 +6,7 @@ Centralized knowledge management server implementing the Model Context Protocol 
 
 - **Automatic context detection** - Extracts org/project from git remote URL
 - **Hierarchical organization** - Knowledge stored as `~/.atlas/orgs/{org}/{project}/atoms/`
+- **Version-controlled storage** - Store atoms in your repo with `init --create_symlink`
 - **Cross-project links** - Reference atoms across projects within the same org
 - **Simple atom model** - 4 types: note, gotcha, recipe, decision
 - **Dual transport** - STDIO (default) or HTTP/SSE
@@ -129,8 +130,7 @@ updated_at: 2026-01-28
 Atlas automatically detects the current project context:
 
 1. **Git remote** - Parses `git remote get-url origin` for org/project
-2. **Symlink** - Checks `.knowledge` symlink pointing to `~/.atlas/orgs/{org}/{project}`
-3. **Fallback** - Uses `global/{directory_name}`
+2. **Fallback** - Uses `global/{directory_name}`
 
 ### Supported git URL formats
 
@@ -139,6 +139,8 @@ Atlas automatically detects the current project context:
 - `git@gitlab.com:org/project.git`
 
 ## Storage Structure
+
+### Default (central storage)
 
 ```
 ~/.atlas/
@@ -149,6 +151,24 @@ Atlas automatically detects the current project context:
 │           └── atoms/
 │               └── K-XXXXXX.yaml
 ```
+
+### Version-controlled (repo storage)
+
+Use `init` with `create_symlink: true` to store atoms in your repo:
+
+```
+{repo}/.atlas/
+├── index.yaml
+└── atoms/
+    └── K-XXXXXX.yaml
+
+~/.atlas/orgs/{org}/{project} → {repo}/.atlas/  (symlink)
+```
+
+This allows:
+- Atoms to be version-controlled via git
+- Knowledge to be shared with collaborators
+- `git pull` to update local knowledge
 
 ## Environment Variables
 
