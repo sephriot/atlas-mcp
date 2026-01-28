@@ -4,9 +4,9 @@ use rmcp::{
 };
 
 use crate::tools::{
-    delete_atom, enable_local_storage, get_atom, get_context, list_atoms, list_projects, search,
-    upsert, DeleteAtomRequest, EnableLocalStorageRequest, GetAtomRequest, ListAtomsRequest,
-    SearchRequest, UpsertRequest,
+    delete_atom, enable_local_storage, get_atom, get_context, link, list_atoms, list_projects,
+    search, unlink, upsert, DeleteAtomRequest, EnableLocalStorageRequest, GetAtomRequest,
+    LinkRequest, ListAtomsRequest, SearchRequest, UpsertRequest,
 };
 
 const INSTRUCTIONS: &str = r#"Atlas MCP - Long-term memory for AI agents.
@@ -16,12 +16,19 @@ WORKFLOW:
 2. READ full atoms - Use get_atom for each relevant search result
 3. APPLY knowledge - Let retrieved atoms constrain your approach
 4. RECORD learnings - Use upsert when you discover something reusable
+5. LINK related atoms - Use link to connect related knowledge
 
 ATOM TYPES:
 - note: Facts, observations, domain knowledge
 - gotcha: Warnings, pitfalls, "watch out for X"
 - recipe: Patterns, how-to guides, code snippets
 - decision: Architectural rationale, why X over Y
+
+LINKING:
+- Use link/unlink to create bidirectional connections between atoms
+- Links are always bidirectional (A links to B means B links to A)
+- Cross-project links supported within same org: "other-project/K-000001"
+- Same-project links use short form: "K-000001"
 
 CONTEXT: Automatically detected from git remote (org/project). Use get_context to verify.
 
@@ -96,6 +103,26 @@ impl AtlasServer {
         params: Parameters<DeleteAtomRequest>,
     ) -> Result<CallToolResult, McpError> {
         let result = delete_atom(params.0).map_err(to_mcp_error)?;
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&result).unwrap_or_default(),
+        )]))
+    }
+
+    #[tool(
+        description = "Create a bidirectional link between two atoms. Both atoms must exist in the same org. Links are stored relative to each atom's project."
+    )]
+    async fn link(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
+        let result = link(params.0).map_err(to_mcp_error)?;
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&result).unwrap_or_default(),
+        )]))
+    }
+
+    #[tool(
+        description = "Remove a bidirectional link between two atoms. Both atoms must exist in the same org."
+    )]
+    async fn unlink(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
+        let result = unlink(params.0).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&result).unwrap_or_default(),
         )]))

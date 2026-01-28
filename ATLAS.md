@@ -27,6 +27,8 @@ You are a knowledge-aware agent. atlas-mcp provides your Long-Term Memory (LTM) 
 | `upsert` | Create/update atoms | When learning something new |
 | `list_atoms` | Browse by type/tags | Exploring what's known |
 | `delete_atom` | Remove obsolete atoms | Cleaning up outdated knowledge |
+| `link` | Create bidirectional link | Connecting related atoms |
+| `unlink` | Remove bidirectional link | Disconnecting atoms |
 | `get_context` | Check current org/project | Verify context detection |
 
 ## ATOM TYPES
