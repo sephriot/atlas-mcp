@@ -16,33 +16,25 @@ use crate::models::{Atom, AtomType, Confidence, IndexEntry};
 use crate::serde_helpers::deserialize_optional_usize;
 use crate::storage::{delete_atom_file, load_index, read_atom as storage_read_atom, save_index};
 
+use super::reference::{format_atom_reference, parse_atom_reference, parse_scope};
+
 // ============================================================================
 // get_atom
 // ============================================================================
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct GetAtomRequest {
-    /// Atom ID (e.g., K-000001) or project/id for cross-project within org
+    /// Atom ID: "org/project/K-000001", "project/K-000001", or "K-000001"
     pub id: String,
-
-    /// Override org (defaults to detected)
-    #[serde(default)]
-    pub org: Option<String>,
-
-    /// Override project (defaults to detected)
-    #[serde(default)]
-    pub project: Option<String>,
 }
 
 /// Get a full atom by ID.
 pub fn get_atom(req: GetAtomRequest) -> Result<Atom, AtlasError> {
-    let ctx = get_context_or_override(&req.org, &req.project)?;
+    let ctx = detect_context()?;
+    let atom_ref = parse_atom_reference(&req.id, &ctx);
 
-    // Parse ID for cross-project reference
-    let (project, id) = parse_id_reference(&req.id, &ctx.project);
-
-    let _lock = ProjectLock::acquire(&ctx.org, &project)?;
-    storage_read_atom(&ctx.org, &project, &id)
+    let _lock = ProjectLock::acquire(&atom_ref.org, &atom_ref.project)?;
+    storage_read_atom(&atom_ref.org, &atom_ref.project, &atom_ref.id)
 }
 
 // ============================================================================
@@ -67,18 +59,15 @@ pub struct ListAtomsRequest {
     #[serde(default, deserialize_with = "deserialize_optional_usize")]
     pub limit: Option<usize>,
 
-    /// Override org (defaults to detected)
+    /// Scope filter: "org" or "org/project". Defaults to detected context (single project).
     #[serde(default)]
-    pub org: Option<String>,
-
-    /// Override project (defaults to detected)
-    #[serde(default)]
-    pub project: Option<String>,
+    pub scope: Option<String>,
 }
 
 /// List atom result.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ListAtomResult {
+    /// Full atom reference: "org/project/K-000001"
     pub id: String,
     pub title: String,
     #[serde(rename = "type")]
@@ -87,10 +76,10 @@ pub struct ListAtomResult {
     pub tags: Vec<String>,
 }
 
-impl From<&IndexEntry> for ListAtomResult {
-    fn from(entry: &IndexEntry) -> Self {
+impl ListAtomResult {
+    fn from_entry(entry: &IndexEntry, org: &str, project: &str) -> Self {
         Self {
-            id: entry.id.clone(),
+            id: format_atom_reference(org, project, &entry.id),
             title: entry.title.clone(),
             atom_type: entry.atom_type,
             confidence: entry.confidence,
@@ -101,27 +90,44 @@ impl From<&IndexEntry> for ListAtomResult {
 
 /// List atoms with optional filtering.
 pub fn list_atoms(req: ListAtomsRequest) -> Result<Vec<ListAtomResult>, AtlasError> {
-    let ctx = get_context_or_override(&req.org, &req.project)?;
-    let _lock = ProjectLock::acquire(&ctx.org, &ctx.project)?;
-    let index = load_index(&ctx.org, &ctx.project)?;
+    let ctx = detect_context()?;
+    let (list_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx);
 
     let limit = req.limit.unwrap_or(50);
 
-    let results: Vec<ListAtomResult> = index
-        .entries
-        .iter()
-        .filter(|entry| {
+    // Determine which projects to list from
+    let projects_to_list: Vec<String> = if let Some(ref proj) = scope_project {
+        vec![proj.clone()]
+    } else {
+        // Default: list from current project only (unlike search which searches all)
+        vec![ctx.project.clone()]
+    };
+
+    let mut results: Vec<ListAtomResult> = Vec::new();
+
+    for project_name in projects_to_list {
+        let _lock = ProjectLock::acquire(&list_org, &project_name)?;
+        let index = match load_index(&list_org, &project_name) {
+            Ok(idx) => idx,
+            Err(_) => continue,
+        };
+
+        for entry in &index.entries {
+            if results.len() >= limit {
+                break;
+            }
+
             // Apply type filter
             if let Some(ref types) = req.types {
                 if !types.contains(&entry.atom_type) {
-                    return false;
+                    continue;
                 }
             }
 
             // Apply confidence filter
             if let Some(ref conf) = req.confidence {
                 if &entry.confidence != conf {
-                    return false;
+                    continue;
                 }
             }
 
@@ -133,15 +139,13 @@ pub fn list_atoms(req: ListAtomsRequest) -> Result<Vec<ListAtomResult>, AtlasErr
                     .iter()
                     .any(|t| entry_tags_lower.contains(&t.to_lowercase()));
                 if !has_match {
-                    return false;
+                    continue;
                 }
             }
 
-            true
-        })
-        .take(limit)
-        .map(ListAtomResult::from)
-        .collect();
+            results.push(ListAtomResult::from_entry(entry, &list_org, &project_name));
+        }
+    }
 
     Ok(results)
 }
@@ -152,16 +156,8 @@ pub fn list_atoms(req: ListAtomsRequest) -> Result<Vec<ListAtomResult>, AtlasErr
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct DeleteAtomRequest {
-    /// Atom ID to delete
+    /// Atom ID: "org/project/K-000001", "project/K-000001", or "K-000001"
     pub id: String,
-
-    /// Override org (defaults to detected)
-    #[serde(default)]
-    pub org: Option<String>,
-
-    /// Override project (defaults to detected)
-    #[serde(default)]
-    pub project: Option<String>,
 }
 
 /// Delete result.
@@ -172,19 +168,21 @@ pub struct DeleteResult {
 
 /// Delete an atom.
 pub fn delete_atom(req: DeleteAtomRequest) -> Result<DeleteResult, AtlasError> {
-    let ctx = get_context_or_override(&req.org, &req.project)?;
-    let _lock = ProjectLock::acquire(&ctx.org, &ctx.project)?;
+    let ctx = detect_context()?;
+    let atom_ref = parse_atom_reference(&req.id, &ctx);
 
-    let mut index = load_index(&ctx.org, &ctx.project)?;
+    let _lock = ProjectLock::acquire(&atom_ref.org, &atom_ref.project)?;
+
+    let mut index = load_index(&atom_ref.org, &atom_ref.project)?;
 
     // Remove from index
-    let removed = index.remove_entry(&req.id);
+    let removed = index.remove_entry(&atom_ref.id);
 
     if removed.is_some() {
         // Delete file
-        delete_atom_file(&ctx.org, &ctx.project, &req.id)?;
+        delete_atom_file(&atom_ref.org, &atom_ref.project, &atom_ref.id)?;
         // Save updated index
-        save_index(&ctx.org, &ctx.project, &index)?;
+        save_index(&atom_ref.org, &atom_ref.project, &index)?;
     }
 
     Ok(DeleteResult {
@@ -443,30 +441,6 @@ fn get_project_root() -> Result<std::path::PathBuf, AtlasError> {
         return Ok(path);
     }
     std::env::current_dir().map_err(|e| AtlasError::Context(format!("Failed to get CWD: {}", e)))
-}
-
-/// Parse ID reference: "K-000001" or "project/K-000001"
-fn parse_id_reference(id: &str, default_project: &str) -> (String, String) {
-    if id.contains('/') {
-        let parts: Vec<&str> = id.splitn(2, '/').collect();
-        if parts.len() == 2 {
-            return (parts[0].to_string(), parts[1].to_string());
-        }
-    }
-    (default_project.to_string(), id.to_string())
-}
-
-fn get_context_or_override(
-    org: &Option<String>,
-    project: &Option<String>,
-) -> Result<ProjectContext, AtlasError> {
-    match (org, project) {
-        (Some(o), Some(p)) => Ok(ProjectContext::new(o.clone(), p.clone())),
-        (Some(_), None) | (None, Some(_)) => Err(AtlasError::Validation(
-            "Both org and project must be specified together".into(),
-        )),
-        (None, None) => detect_context(),
-    }
 }
 
 /// Move a file, falling back to copy+delete if rename fails across filesystems.

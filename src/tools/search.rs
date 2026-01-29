@@ -2,12 +2,14 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::config::list_org_projects;
-use crate::context::{detect_context, ProjectContext};
+use crate::context::detect_context;
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
 use crate::models::{AtomType, Confidence, IndexEntry};
 use crate::serde_helpers::deserialize_optional_usize;
 use crate::storage::load_index;
+
+use super::reference::{format_atom_reference, parse_scope};
 
 /// Score multiplier for results from other projects in the same org.
 const CROSS_PROJECT_SCORE_MULTIPLIER: f32 = 0.7;
@@ -35,22 +37,15 @@ pub struct SearchRequest {
     #[serde(default, deserialize_with = "deserialize_optional_usize")]
     pub limit: Option<usize>,
 
-    /// Override org (defaults to detected)
+    /// Scope filter: "org" or "org/project". Defaults to detected org (searches all projects).
     #[serde(default)]
-    pub org: Option<String>,
-
-    /// Override project (defaults to detected)
-    #[serde(default)]
-    pub project: Option<String>,
-
-    /// Search across all projects in the org (default: true)
-    #[serde(default)]
-    pub cross_project: Option<bool>,
+    pub scope: Option<String>,
 }
 
 /// Search result entry.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct SearchResult {
+    /// Full atom reference: "org/project/K-000001"
     pub id: String,
     pub title: String,
     #[serde(rename = "type")]
@@ -58,29 +53,27 @@ pub struct SearchResult {
     pub confidence: Confidence,
     pub tags: Vec<String>,
     pub score: f32,
-    /// Project name (only present for cross-project results)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub project: Option<String>,
 }
 
 impl SearchResult {
-    fn from_entry(entry: &IndexEntry, score: f32, project: Option<String>) -> Self {
+    fn from_entry(entry: &IndexEntry, score: f32, org: &str, project: &str) -> Self {
         Self {
-            id: entry.id.clone(),
+            id: format_atom_reference(org, project, &entry.id),
             title: entry.title.clone(),
             atom_type: entry.atom_type,
             confidence: entry.confidence,
             tags: entry.tags.clone(),
             score,
-            project,
         }
     }
 }
 
 /// Search atoms in the index.
 pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
-    let ctx = get_context_or_override(&req.org, &req.project)?;
-    let cross_project = req.cross_project.unwrap_or(true);
+    let ctx = detect_context()?;
+
+    // Parse scope to determine org and optional project filter
+    let (search_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx);
 
     let limit = req.limit.unwrap_or(20);
     let query_terms = req
@@ -94,24 +87,31 @@ pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
         })
         .unwrap_or_default();
 
-    // Determine which projects to search
-    let projects_to_search: Vec<(String, bool)> = if cross_project {
-        let mut projects = vec![(ctx.project.clone(), true)]; // (project_name, is_current)
-        for proj in list_org_projects(&ctx.org)? {
-            if proj != ctx.project {
-                projects.push((proj, false));
-            }
+    // Determine which projects to search:
+    // - If scope specifies a project, search only that project
+    // - Otherwise, search entire org with score penalty for non-current projects
+    let projects_to_search: Vec<(String, bool)> = if let Some(ref proj) = scope_project {
+        // Scope specifies project - search only that one
+        vec![(proj.clone(), proj == &ctx.project && search_org == ctx.org)]
+    } else {
+        // No project in scope - search entire org
+        let mut projects = Vec::new();
+        for proj in list_org_projects(&search_org)? {
+            let is_current = proj == ctx.project && search_org == ctx.org;
+            projects.push((proj, is_current));
+        }
+        // Ensure current project is in the list if we're searching the current org
+        if search_org == ctx.org && !projects.iter().any(|(p, _)| p == &ctx.project) {
+            projects.insert(0, (ctx.project.clone(), true));
         }
         projects
-    } else {
-        vec![(ctx.project.clone(), true)]
     };
 
     let mut results: Vec<(SearchResult, f32)> = Vec::new();
 
     for (project_name, is_current_project) in projects_to_search {
-        let _lock = ProjectLock::acquire(&ctx.org, &project_name)?;
-        let index = match load_index(&ctx.org, &project_name) {
+        let _lock = ProjectLock::acquire(&search_org, &project_name)?;
+        let index = match load_index(&search_org, &project_name) {
             Ok(idx) => idx,
             Err(_) => continue, // Skip projects with no index
         };
@@ -156,13 +156,10 @@ pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
                 score *= CROSS_PROJECT_SCORE_MULTIPLIER;
             }
 
-            let project_field = if is_current_project {
-                None
-            } else {
-                Some(project_name.clone())
-            };
-
-            results.push((SearchResult::from_entry(entry, score, project_field), score));
+            results.push((
+                SearchResult::from_entry(entry, score, &search_org, &project_name),
+                score,
+            ));
         }
     }
 
@@ -217,19 +214,6 @@ fn calculate_score(entry: &IndexEntry, query_terms: &[String]) -> f32 {
     }
 
     score
-}
-
-fn get_context_or_override(
-    org: &Option<String>,
-    project: &Option<String>,
-) -> Result<ProjectContext, AtlasError> {
-    match (org, project) {
-        (Some(o), Some(p)) => Ok(ProjectContext::new(o.clone(), p.clone())),
-        (Some(_), None) | (None, Some(_)) => Err(AtlasError::Validation(
-            "Both org and project must be specified together".into(),
-        )),
-        (None, None) => detect_context(),
-    }
 }
 
 #[cfg(test)]
@@ -367,20 +351,18 @@ mod tests {
     #[test]
     fn test_search_result_from_entry() {
         let entry = make_entry("K-000001", "Test", vec!["tag1"]);
-        let result = SearchResult::from_entry(&entry, 5.0, None);
-        assert_eq!(result.id, "K-000001");
+        let result = SearchResult::from_entry(&entry, 5.0, "test-org", "test-project");
+        assert_eq!(result.id, "test-org/test-project/K-000001");
         assert_eq!(result.title, "Test");
         assert_eq!(result.score, 5.0);
-        assert!(result.project.is_none());
     }
 
     #[test]
-    fn test_search_result_with_project() {
+    fn test_search_result_with_other_project() {
         let entry = make_entry("K-000001", "Test", vec!["tag1"]);
-        let result = SearchResult::from_entry(&entry, 7.0, Some("other-project".to_string()));
-        assert_eq!(result.id, "K-000001");
+        let result = SearchResult::from_entry(&entry, 7.0, "other-org", "other-project");
+        assert_eq!(result.id, "other-org/other-project/K-000001");
         assert_eq!(result.score, 7.0);
-        assert_eq!(result.project, Some("other-project".to_string()));
     }
 
     #[test]

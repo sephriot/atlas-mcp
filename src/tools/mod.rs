@@ -1,5 +1,6 @@
 mod atoms;
 mod link;
+mod reference;
 mod search;
 mod upsert;
 

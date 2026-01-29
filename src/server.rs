@@ -24,11 +24,15 @@ ATOM TYPES:
 - recipe: Patterns, how-to guides, code snippets
 - decision: Architectural rationale, why X over Y
 
+ATOM IDs:
+- All IDs returned as full paths: "org/project/K-000001"
+- Accepts: full path, "project/K-000001", or bare "K-000001" (context fills gaps)
+- Cross-project/org operations use full paths
+
 LINKING:
 - Use link/unlink to create directed connections between atoms
 - Links are directed: A links to B does NOT mean B links to A
-- Cross-project links supported within same org: "other-project/K-000001"
-- Same-project links use short form: "K-000001"
+- Cross-project links supported within same org
 
 CONTEXT: Automatically detected from git remote (org/project). Use get_context to verify.
 
@@ -54,7 +58,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Search knowledge atoms by title, tags, type, and confidence. Returns matching atoms with relevance scores. By default (cross_project: true), searches all projects in the org with current project results scoring higher (0.7x penalty for other projects)."
+        description = "Search knowledge atoms by title, tags, type, and confidence. Returns full atom IDs (org/project/id). Use scope to filter: 'org' or 'org/project'. Default searches entire detected org with current project scoring higher."
     )]
     async fn search(&self, params: Parameters<SearchRequest>) -> Result<CallToolResult, McpError> {
         let results = search(params.0).map_err(to_mcp_error)?;
@@ -64,7 +68,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Create or update a knowledge atom. Provide id to update existing, omit for new atom."
+        description = "Create or update a knowledge atom. For updates, provide id as full path (org/project/id), project/id, or bare id. Omit id for new atoms."
     )]
     async fn upsert(&self, params: Parameters<UpsertRequest>) -> Result<CallToolResult, McpError> {
         let result = upsert(params.0).map_err(to_mcp_error)?;
@@ -74,7 +78,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Get full atom content by ID. Supports cross-project within org using project/id format."
+        description = "Get full atom content by ID. Accepts org/project/id, project/id, or bare id (context fills gaps)."
     )]
     async fn get_atom(
         &self,
@@ -86,7 +90,9 @@ impl AtlasServer {
         )]))
     }
 
-    #[tool(description = "List atoms with optional filtering by type, tags, and confidence.")]
+    #[tool(
+        description = "List atoms with optional filtering by type, tags, and confidence. Use scope to filter: 'org/project'. Default lists detected project only."
+    )]
     async fn list_atoms(
         &self,
         params: Parameters<ListAtomsRequest>,
@@ -97,7 +103,9 @@ impl AtlasServer {
         )]))
     }
 
-    #[tool(description = "Delete an atom by ID.")]
+    #[tool(
+        description = "Delete an atom by ID. Accepts org/project/id, project/id, or bare id (context fills gaps)."
+    )]
     async fn delete_atom(
         &self,
         params: Parameters<DeleteAtomRequest>,
@@ -109,7 +117,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Create a directed link from source atom to target atom. Both atoms must exist in the same org. Link is stored in source atom only."
+        description = "Create a directed link from source to target atom. Both must be in same org. Accepts org/project/id, project/id, or bare id."
     )]
     async fn link(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
         let result = link(params.0).map_err(to_mcp_error)?;
@@ -119,7 +127,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Remove a directed link from source atom to target atom. Target atom need not exist (allows cleaning up dangling links)."
+        description = "Remove a directed link from source to target atom. Target need not exist (allows cleaning dangling links). Accepts org/project/id, project/id, or bare id."
     )]
     async fn unlink(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
         let result = unlink(params.0).map_err(to_mcp_error)?;
