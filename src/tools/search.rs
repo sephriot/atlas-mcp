@@ -27,6 +27,7 @@ pub struct SearchRequest {
 
     /// Filter by tags (matches any)
     #[serde(default)]
+    #[schemars(extend("examples" = [["api", "architecture"]]))]
     pub tags: Option<Vec<String>>,
 
     /// Filter by confidence level

@@ -49,6 +49,7 @@ pub struct ListAtomsRequest {
 
     /// Filter by tags (matches any)
     #[serde(default)]
+    #[schemars(extend("examples" = [["api", "rust"]]))]
     pub tags: Option<Vec<String>>,
 
     /// Filter by confidence level

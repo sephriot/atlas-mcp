@@ -38,18 +38,22 @@ pub struct UpsertRequest {
 
     /// Potential pitfalls (optional)
     #[serde(default)]
+    #[schemars(extend("examples" = [["May fail silently", "Requires auth"]]))]
     pub pitfalls: Option<Vec<String>>,
 
     /// Keywords for search (optional)
     #[serde(default)]
+    #[schemars(extend("examples" = [["api", "rust", "error-handling"]]))]
     pub tags: Option<Vec<String>>,
 
     /// References - simple strings (paths or URLs)
     #[serde(default)]
+    #[schemars(extend("examples" = [["src/lib.rs", "https://docs.rs"]]))]
     pub sources: Option<Vec<String>>,
 
-    /// Related atoms - id or project/id format
+    /// Related atoms - supports bare id, project/id, or org/project/id format
     #[serde(default)]
+    #[schemars(extend("examples" = [["K-000001", "myorg/myproject/K-000002"]]))]
     pub links: Option<Vec<String>>,
 }
 
@@ -77,7 +81,7 @@ pub fn upsert(req: UpsertRequest) -> Result<UpsertResult, AtlasError> {
 
     // Validate links before acquiring lock
     if let Some(ref links) = req.links {
-        validate_links(&target_org, links)?;
+        validate_links(&target_org, links, &ctx)?;
     }
 
     let _lock = ProjectLock::acquire(&target_org, &target_project)?;
@@ -128,31 +132,35 @@ pub fn upsert(req: UpsertRequest) -> Result<UpsertResult, AtlasError> {
 }
 
 /// Validate links - reject cross-org links, allow cross-project within same org.
-fn validate_links(org: &str, links: &[String]) -> Result<(), AtlasError> {
+///
+/// Accepts:
+/// - "K-000001" (bare id, same project)
+/// - "project/K-000001" (cross-project within same org)
+/// - "org/project/K-000001" (full path, org must match target_org)
+fn validate_links(
+    target_org: &str,
+    links: &[String],
+    ctx: &crate::context::ProjectContext,
+) -> Result<(), AtlasError> {
     for link in links {
-        // Parse link: either "K-XXXXXX" or "project/K-XXXXXX"
-        if let Some((project, _id)) = parse_link(link) {
-            // Cross-project link - verify target project exists in same org
-            let project_path = get_project_path(org, &project)?;
-            if !project_path.exists() {
-                return Err(AtlasError::Validation(format!(
-                    "Link target project '{}' does not exist in org '{}'",
-                    project, org
-                )));
-            }
+        let atom_ref = parse_atom_reference(link, ctx);
+
+        // Reject cross-org links
+        if atom_ref.org != target_org {
+            return Err(AtlasError::Validation(format!(
+                "Cross-org links not allowed: '{}' references org '{}', expected '{}'",
+                link, atom_ref.org, target_org
+            )));
         }
-        // Simple ID link (same project) - always valid
+
+        // Verify target project exists in the org
+        let project_path = get_project_path(&atom_ref.org, &atom_ref.project)?;
+        if !project_path.exists() {
+            return Err(AtlasError::Validation(format!(
+                "Link target project '{}' does not exist in org '{}'",
+                atom_ref.project, atom_ref.org
+            )));
+        }
     }
     Ok(())
-}
-
-/// Parse a link into (project, id) or just id.
-fn parse_link(link: &str) -> Option<(String, String)> {
-    if link.contains('/') {
-        let parts: Vec<&str> = link.splitn(2, '/').collect();
-        if parts.len() == 2 {
-            return Some((parts[0].to_string(), parts[1].to_string()));
-        }
-    }
-    None
 }

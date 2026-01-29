@@ -1,4 +1,4 @@
-next_id: 10
+next_id: 12
 entries:
 - id: K-000001
   title: Atlas MCP Project Overview
@@ -105,3 +105,11 @@ entries:
   - cross-device
   sources:
   - src/tools/atoms.rs
+- id: K-000010
+  title: Full Path Atom References in API
+  type: decision
+  confidence: high
+- id: K-000011
+  title: Schemars extend attribute for JSON Schema examples
+  type: recipe
+  confidence: high
