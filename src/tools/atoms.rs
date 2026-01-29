@@ -59,7 +59,7 @@ pub struct ListAtomsRequest {
     #[serde(default, deserialize_with = "deserialize_optional_usize")]
     pub limit: Option<usize>,
 
-    /// Scope filter: "org" or "org/project". Defaults to detected context (single project).
+    /// Scope filter: org name or org/project path. Examples: "acme", "acme/backend"
     #[serde(default)]
     pub scope: Option<String>,
 }
@@ -91,7 +91,7 @@ impl ListAtomResult {
 /// List atoms with optional filtering.
 pub fn list_atoms(req: ListAtomsRequest) -> Result<Vec<ListAtomResult>, AtlasError> {
     let ctx = detect_context()?;
-    let (list_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx);
+    let (list_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx)?;
 
     let limit = req.limit.unwrap_or(50);
 

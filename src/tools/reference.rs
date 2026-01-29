@@ -4,6 +4,7 @@
 //! context-relative formats (`project/K-000001` or `K-000001`).
 
 use crate::context::ProjectContext;
+use crate::error::AtlasError;
 
 /// Parsed atom reference with org, project, and id components.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,6 +64,19 @@ pub fn format_atom_reference(org: &str, project: &str, id: &str) -> String {
     format!("{}/{}/{}", org, project, id)
 }
 
+/// Common placeholder patterns that AI models might use literally.
+const PLACEHOLDER_PATTERNS: &[&str] = &[
+    "org",
+    "project",
+    "org/project",
+    "<org>",
+    "<project>",
+    "<org>/<project>",
+    "{org}",
+    "{project}",
+    "{org}/{project}",
+];
+
 /// Parse scope filter for search/list operations.
 ///
 /// Accepts:
@@ -70,16 +84,28 @@ pub fn format_atom_reference(org: &str, project: &str, id: &str) -> String {
 /// - "org" -> search all projects in that org
 /// - "org/project" -> search only that project
 ///
-/// Returns (org, optional_project).
-pub fn parse_scope(scope: Option<&str>, ctx: &ProjectContext) -> (String, Option<String>) {
+/// Returns (org, optional_project) or error if scope is a placeholder.
+pub fn parse_scope(
+    scope: Option<&str>,
+    ctx: &ProjectContext,
+) -> Result<(String, Option<String>), AtlasError> {
     match scope {
-        None => (ctx.org.clone(), None),
+        None => Ok((ctx.org.clone(), None)),
         Some(s) => {
+            // Reject common placeholder patterns
+            if PLACEHOLDER_PATTERNS.contains(&s.to_lowercase().as_str()) {
+                return Err(AtlasError::Validation(format!(
+                    "Invalid scope '{}'. Expected actual org/project names, e.g., 'acme' or 'acme/backend'. \
+                    Use get_context to find your current org/project.",
+                    s
+                )));
+            }
+
             let parts: Vec<&str> = s.split('/').collect();
             match parts.len() {
-                1 => (parts[0].to_string(), None),
-                2 => (parts[0].to_string(), Some(parts[1].to_string())),
-                _ => (ctx.org.clone(), None),
+                1 => Ok((parts[0].to_string(), None)),
+                2 => Ok((parts[0].to_string(), Some(parts[1].to_string()))),
+                _ => Ok((ctx.org.clone(), None)),
             }
         }
     }
@@ -174,7 +200,7 @@ mod tests {
     #[test]
     fn test_parse_scope_none() {
         let ctx = test_ctx();
-        let (org, proj) = parse_scope(None, &ctx);
+        let (org, proj) = parse_scope(None, &ctx).unwrap();
         assert_eq!(org, "test-org");
         assert_eq!(proj, None);
     }
@@ -182,7 +208,7 @@ mod tests {
     #[test]
     fn test_parse_scope_org_only() {
         let ctx = test_ctx();
-        let (org, proj) = parse_scope(Some("other-org"), &ctx);
+        let (org, proj) = parse_scope(Some("other-org"), &ctx).unwrap();
         assert_eq!(org, "other-org");
         assert_eq!(proj, None);
     }
@@ -190,8 +216,51 @@ mod tests {
     #[test]
     fn test_parse_scope_org_and_project() {
         let ctx = test_ctx();
-        let (org, proj) = parse_scope(Some("other-org/other-project"), &ctx);
+        let (org, proj) = parse_scope(Some("other-org/other-project"), &ctx).unwrap();
         assert_eq!(org, "other-org");
         assert_eq!(proj, Some("other-project".to_string()));
+    }
+
+    #[test]
+    fn test_parse_scope_rejects_placeholder_org_project() {
+        let ctx = test_ctx();
+        let result = parse_scope(Some("org/project"), &ctx);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Invalid scope"));
+        assert!(err.contains("org/project"));
+    }
+
+    #[test]
+    fn test_parse_scope_rejects_placeholder_org() {
+        let ctx = test_ctx();
+        let result = parse_scope(Some("org"), &ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_scope_rejects_placeholder_project() {
+        let ctx = test_ctx();
+        let result = parse_scope(Some("project"), &ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_scope_rejects_bracketed_placeholders() {
+        let ctx = test_ctx();
+        assert!(parse_scope(Some("<org>"), &ctx).is_err());
+        assert!(parse_scope(Some("<project>"), &ctx).is_err());
+        assert!(parse_scope(Some("<org>/<project>"), &ctx).is_err());
+        assert!(parse_scope(Some("{org}"), &ctx).is_err());
+        assert!(parse_scope(Some("{project}"), &ctx).is_err());
+        assert!(parse_scope(Some("{org}/{project}"), &ctx).is_err());
+    }
+
+    #[test]
+    fn test_parse_scope_case_insensitive_placeholder_detection() {
+        let ctx = test_ctx();
+        assert!(parse_scope(Some("ORG"), &ctx).is_err());
+        assert!(parse_scope(Some("PROJECT"), &ctx).is_err());
+        assert!(parse_scope(Some("Org/Project"), &ctx).is_err());
     }
 }

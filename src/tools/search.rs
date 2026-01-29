@@ -37,7 +37,7 @@ pub struct SearchRequest {
     #[serde(default, deserialize_with = "deserialize_optional_usize")]
     pub limit: Option<usize>,
 
-    /// Scope filter: "org" or "org/project". Defaults to detected org (searches all projects).
+    /// Scope filter: org name or org/project path. Examples: "acme", "acme/backend"
     #[serde(default)]
     pub scope: Option<String>,
 }
@@ -73,7 +73,7 @@ pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
     let ctx = detect_context()?;
 
     // Parse scope to determine org and optional project filter
-    let (search_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx);
+    let (search_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx)?;
 
     let limit = req.limit.unwrap_or(20);
     let query_terms = req

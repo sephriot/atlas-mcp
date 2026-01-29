@@ -58,7 +58,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Search knowledge atoms by title, tags, type, and confidence. Returns full atom IDs (org/project/id). Use scope to filter: 'org' or 'org/project'. Default searches entire detected org with current project scoring higher."
+        description = "Search knowledge atoms by title, tags, type, and confidence. Returns full atom IDs (org/project/id). Optionally filter by scope: org name (e.g., 'acme') searches all projects in that org, or 'org/project' (e.g., 'acme/backend') for a specific project. Default: searches entire detected org with current project scoring higher."
     )]
     async fn search(&self, params: Parameters<SearchRequest>) -> Result<CallToolResult, McpError> {
         let results = search(params.0).map_err(to_mcp_error)?;
@@ -91,7 +91,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "List atoms with optional filtering by type, tags, and confidence. Use scope to filter: 'org/project'. Default lists detected project only."
+        description = "List atoms with optional filtering by type, tags, and confidence. Optionally filter by scope (e.g., 'acme/backend'). Default: lists detected project only."
     )]
     async fn list_atoms(
         &self,
