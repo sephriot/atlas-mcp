@@ -36,7 +36,12 @@ LINKING:
 
 CONTEXT: Automatically detected from git remote (org/project). Use get_context to verify.
 
-CITATION: Reference atom IDs in your reasoning, e.g., [K-000042]"#;
+CITATION: Reference atom IDs in your reasoning, e.g., [K-000042]
+
+PARAMETER FORMAT:
+- Array fields (tags, sources, links, pitfalls) MUST be JSON arrays, NOT strings
+- CORRECT: tags: ["api", "rust"]
+- WRONG: tags: "[\"api\", \"rust\"]""#;
 
 /// Atlas MCP Server for centralized knowledge management.
 #[derive(Clone)]
@@ -68,7 +73,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Create or update a knowledge atom. For updates, provide id as full path (org/project/id), project/id, or bare id. Omit id for new atoms."
+        description = "Create or update a knowledge atom. For updates, provide id as full path (org/project/id), project/id, or bare id. Omit id for new atoms. IMPORTANT: Array fields (tags, sources, links, pitfalls) must be JSON arrays, not stringified arrays. Correct: tags: [\"api\", \"rust\"]. Wrong: tags: \"[\\\"api\\\", \\\"rust\\\"]\""
     )]
     async fn upsert(&self, params: Parameters<UpsertRequest>) -> Result<CallToolResult, McpError> {
         let result = upsert(params.0).map_err(to_mcp_error)?;

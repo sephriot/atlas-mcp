@@ -11,6 +11,80 @@ use crate::storage::{ensure_project_exists, load_index, read_atom, save_index, w
 
 use super::reference::{format_atom_reference, parse_atom_reference};
 
+/// Check if a string looks like a stringified JSON array and return parsed version if so.
+fn detect_stringified_array(value: &str) -> Option<Vec<String>> {
+    let trimmed = value.trim();
+    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        serde_json::from_str::<Vec<String>>(trimmed).ok()
+    } else {
+        None
+    }
+}
+
+/// Validate that array fields don't contain stringified JSON arrays.
+/// Returns an error with the correct format if stringified arrays are detected.
+fn validate_array_fields(req: &UpsertRequest) -> Result<(), AtlasError> {
+    let mut errors = Vec::new();
+
+    // Check each array field for stringified arrays
+    if let Some(ref tags) = req.tags {
+        for (i, tag) in tags.iter().enumerate() {
+            if let Some(parsed) = detect_stringified_array(tag) {
+                errors.push(format!(
+                    "tags[{}] appears to be a stringified array. You passed: tags: {:?}. Correct format: tags: {:?}",
+                    i, tags, parsed
+                ));
+                break; // One error per field is enough
+            }
+        }
+    }
+
+    if let Some(ref sources) = req.sources {
+        for (i, source) in sources.iter().enumerate() {
+            if let Some(parsed) = detect_stringified_array(source) {
+                errors.push(format!(
+                    "sources[{}] appears to be a stringified array. You passed: sources: {:?}. Correct format: sources: {:?}",
+                    i, sources, parsed
+                ));
+                break;
+            }
+        }
+    }
+
+    if let Some(ref links) = req.links {
+        for (i, link) in links.iter().enumerate() {
+            if let Some(parsed) = detect_stringified_array(link) {
+                errors.push(format!(
+                    "links[{}] appears to be a stringified array. You passed: links: {:?}. Correct format: links: {:?}",
+                    i, links, parsed
+                ));
+                break;
+            }
+        }
+    }
+
+    if let Some(ref pitfalls) = req.pitfalls {
+        for (i, pitfall) in pitfalls.iter().enumerate() {
+            if let Some(parsed) = detect_stringified_array(pitfall) {
+                errors.push(format!(
+                    "pitfalls[{}] appears to be a stringified array. You passed: pitfalls: {:?}. Correct format: pitfalls: {:?}",
+                    i, pitfalls, parsed
+                ));
+                break;
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(AtlasError::Validation(format!(
+            "Array fields must be JSON arrays, not stringified arrays:\n{}",
+            errors.join("\n")
+        )))
+    }
+}
+
 /// Upsert request parameters.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct UpsertRequest {
@@ -67,6 +141,9 @@ pub struct UpsertResult {
 
 /// Create or update an atom.
 pub fn upsert(req: UpsertRequest) -> Result<UpsertResult, AtlasError> {
+    // Validate array fields aren't stringified JSON
+    validate_array_fields(&req)?;
+
     let ctx = detect_context()?;
 
     // Determine org/project based on whether this is an update or create
@@ -163,4 +240,95 @@ fn validate_links(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_request(
+        tags: Option<Vec<String>>,
+        sources: Option<Vec<String>>,
+        links: Option<Vec<String>>,
+        pitfalls: Option<Vec<String>>,
+    ) -> UpsertRequest {
+        UpsertRequest {
+            id: None,
+            title: "Test".into(),
+            atom_type: AtomType::Note,
+            confidence: Confidence::Medium,
+            summary: "Test summary".into(),
+            details: None,
+            pitfalls,
+            tags,
+            sources,
+            links,
+        }
+    }
+
+    #[test]
+    fn test_detect_stringified_array_valid() {
+        let result = detect_stringified_array(r#"["api", "rust"]"#);
+        assert_eq!(result, Some(vec!["api".to_string(), "rust".to_string()]));
+    }
+
+    #[test]
+    fn test_detect_stringified_array_with_whitespace() {
+        let result = detect_stringified_array(r#"  ["api", "rust"]  "#);
+        assert_eq!(result, Some(vec!["api".to_string(), "rust".to_string()]));
+    }
+
+    #[test]
+    fn test_detect_stringified_array_not_array() {
+        assert_eq!(detect_stringified_array("just a string"), None);
+        assert_eq!(detect_stringified_array("api"), None);
+        assert_eq!(detect_stringified_array(""), None);
+    }
+
+    #[test]
+    fn test_detect_stringified_array_invalid_json() {
+        // Starts with [ but not valid JSON
+        assert_eq!(detect_stringified_array("[not valid json"), None);
+    }
+
+    #[test]
+    fn test_validate_array_fields_valid() {
+        let req = make_request(
+            Some(vec!["api".into(), "rust".into()]),
+            Some(vec!["src/lib.rs".into()]),
+            None,
+            None,
+        );
+        assert!(validate_array_fields(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_array_fields_stringified_tags() {
+        let req = make_request(Some(vec![r#"["api", "rust"]"#.into()]), None, None, None);
+        let err = validate_array_fields(&req).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("tags[0]"));
+        assert!(msg.contains("stringified array"));
+        assert!(msg.contains(r#"Correct format: tags: ["api", "rust"]"#));
+    }
+
+    #[test]
+    fn test_validate_array_fields_stringified_sources() {
+        let req = make_request(
+            None,
+            Some(vec![r#"["src/lib.rs", "src/main.rs"]"#.into()]),
+            None,
+            None,
+        );
+        let err = validate_array_fields(&req).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("sources[0]"));
+        assert!(msg.contains("stringified array"));
+    }
+
+    #[test]
+    fn test_validate_array_fields_none_values() {
+        let req = make_request(None, None, None, None);
+        assert!(validate_array_fields(&req).is_ok());
+    }
 }
