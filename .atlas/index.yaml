@@ -109,7 +109,17 @@ entries:
   title: Full Path Atom References in API
   type: decision
   confidence: high
+  tags:
+  - api
+  - architecture
+  - atom-reference
+  - decision
 - id: K-000011
   title: Schemars extend attribute for JSON Schema examples
   type: recipe
   confidence: high
+  tags:
+  - schemars
+  - json-schema
+  - rust
+  - pattern

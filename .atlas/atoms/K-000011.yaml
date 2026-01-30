@@ -3,28 +3,9 @@ title: Schemars extend attribute for JSON Schema examples
 type: recipe
 confidence: high
 summary: 'Use #[schemars(extend("examples" = [[...]]))] to add examples to array fields in JSON Schema output, helping clients understand expected formats.'
-details: |-
-  The schemars crate supports extending JSON Schema output with arbitrary properties using the `extend` attribute.
-
-  For array fields, wrap the example array in another array (the outer array is the JSON Schema "examples" array, inner is the actual example value):
-
-  ```rust
-  /// Keywords for search (optional)
-  #[serde(default)]
-  #[schemars(extend("examples" = [["api", "rust", "error-handling"]]))]
-  pub tags: Option<Vec<String>>,
-  ```
-
-  This generates schema with:
-  ```json
-  {
-    "tags": {
-      "type": "array",
-      "items": { "type": "string" },
-      "examples": [["api", "rust", "error-handling"]]
-    }
-  }
-  ```
-
-  Sources: src/tools/upsert.rs, src/tools/search.rs, src/tools/atoms.rs
-updated_at: 2026-01-29
+tags:
+- schemars
+- json-schema
+- rust
+- pattern
+updated_at: 2026-01-30

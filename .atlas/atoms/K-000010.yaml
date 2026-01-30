@@ -3,26 +3,9 @@ title: Full Path Atom References in API
 type: decision
 confidence: high
 summary: All API responses return atom IDs as full paths (org/project/K-000001). Inputs accept full path, project/id, or bare id with context filling gaps.
-details: |-
-  ## Context
-  The original API had separate `org` and `project` override parameters on most tools, which was verbose and error-prone.
-
-  ## Decision
-  1. **Output**: All atom IDs returned in `org/project/K-000001` format
-  2. **Input**: Accept any format - full path, `project/id`, or bare `id` - context fills missing parts
-  3. **Storage**: Unchanged - links stored internally in relative format for portability
-  4. **Scope**: Replace `org`/`project` overrides with single `scope` param for search/list filtering
-
-  ## Implementation
-  - `parse_atom_reference()` in `src/tools/reference.rs` handles input parsing
-  - `format_atom_reference()` formats full paths for output
-  - `parse_scope()` handles scope filter parsing
-
-  ## Rationale
-  - Unambiguous references in responses (no context needed to interpret)
-  - Flexible input (backwards compatible with bare IDs)
-  - Simpler API surface (fewer parameters)
-  - Cross-project operations explicit via full paths
-
-  Tags: api, architecture, atom-reference, decision
-updated_at: 2026-01-29
+tags:
+- api
+- architecture
+- atom-reference
+- decision
+updated_at: 2026-01-30
