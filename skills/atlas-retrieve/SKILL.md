@@ -10,8 +10,8 @@ Retrieve relevant knowledge from Atlas before taking action.
 ## Workflow
 
 1. **Extract keywords** from the task/question
-2. **Search Atlas** with those keywords using `mcp__atlas-mcp__search`
-3. **Read full atoms** with `mcp__atlas-mcp__get_atom` for each relevant hit
+2. **Search Atlas** with those keywords using `mcp__atlas__search`
+3. **Read full atoms** with `mcp__atlas__get_atom` for each relevant hit
 4. **Cite atoms** in your response using `[K-XXXXXX]` format
 
 ## Search Strategies

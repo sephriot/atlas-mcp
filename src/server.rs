@@ -186,7 +186,7 @@ impl rmcp::handler::server::ServerHandler for AtlasServer {
             protocol_version: ProtocolVersion::LATEST,
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation {
-                name: "atlas-mcp".into(),
+                name: "atlas".into(),
                 title: Some("Atlas MCP".into()),
                 version: env!("CARGO_PKG_VERSION").into(),
                 icons: None,

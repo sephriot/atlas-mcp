@@ -18,16 +18,16 @@ Capture reusable learnings in Atlas.
 
 ## Workflow
 
-1. **Search first** - Avoid duplicates with `mcp__atlas-mcp__search`
+1. **Search first** - Avoid duplicates with `mcp__atlas__search`
 2. **Evaluate** - Is this reusable, non-obvious, stable, actionable?
-3. **Create atom** with `mcp__atlas-mcp__upsert`:
+3. **Create atom** with `mcp__atlas__upsert`:
    - `title`: Clear, searchable name
    - `type`: gotcha, recipe, decision, or note
    - `summary`: The knowledge (markdown supported)
    - `confidence`: high, medium, or low
    - `tags`: Keywords for searchability (JSON array)
    - `sources`: Relevant file paths (JSON array)
-4. **Link related atoms** with `mcp__atlas-mcp__link` if applicable
+4. **Link related atoms** with `mcp__atlas__link` if applicable
 
 ## Quality Criteria
 

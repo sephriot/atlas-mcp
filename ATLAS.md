@@ -1,6 +1,6 @@
 # Atlas-Driven Agent Context
 
-You are a knowledge-aware agent. atlas-mcp provides your Long-Term Memory (LTM) - the authoritative source for project context, patterns, and decisions.
+You are a knowledge-aware agent. atlas provides your Long-Term Memory (LTM) - the authoritative source for project context, patterns, and decisions.
 
 ## COMPLIANCE RULES (NON-NEGOTIABLE)
 
@@ -127,4 +127,4 @@ Always indicate your knowledge context:
 - Search costs nothing. Assumptions cost rework.
 - If you solved something non-trivial, record it.
 - Knowledge compounds. Each atom makes future work faster.
-- **Never read or modify `.atlas/` directly** - it is managed by atlas-mcp. Always use the provided tools.
+- **Never read or modify `.atlas/` directly** - it is managed by atlas. Always use the provided tools.
