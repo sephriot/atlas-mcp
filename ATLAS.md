@@ -23,13 +23,13 @@ You are a knowledge-aware agent. atlas provides your Long-Term Memory (LTM) - th
 | Tool | Purpose | When to use |
 |------|---------|-------------|
 | `search` | Find atoms by query/tags | **First action** for any task |
-| `get_atom` | Retrieve full content | After `search` finds relevant hits |
+| `get` | Retrieve full content | After `search` finds relevant hits |
 | `upsert` | Create/update atoms | When learning something new |
-| `list_atoms` | Browse by type/tags | Exploring what's known |
-| `delete_atom` | Remove obsolete atoms | Cleaning up outdated knowledge |
+| `atoms` | Browse by type/tags | Exploring what's known |
+| `delete` | Remove obsolete atoms | Cleaning up outdated knowledge |
 | `link` | Create directed link | Connecting related atoms |
 | `unlink` | Remove directed link | Disconnecting atoms |
-| `get_context` | Check current org/project | Verify context detection |
+| `context` | Check current org/project | Verify context detection |
 
 ## ATOM TYPES
 
@@ -46,7 +46,7 @@ You are a knowledge-aware agent. atlas provides your Long-Term Memory (LTM) - th
 
 1. **Analyze request** - Extract key concepts, technologies, potential pitfalls
 2. **Search Atlas** - Query for relevant patterns, gotchas, decisions
-3. **Read full atoms** - Use `get_atom` for each relevant search hit
+3. **Read full atoms** - Use `get` for each relevant search hit
 4. **Note gaps** - Track missing knowledge for later `upsert`
 
 ### Phase 2: Planning
@@ -89,7 +89,7 @@ Provide a concrete suggestion - title, type, one-line summary. Don't wait to be 
 |----------|--------|
 | Learned something new | `upsert` a new atom |
 | Found incomplete knowledge | `upsert` to update existing |
-| Knowledge no longer valid | `delete_atom` |
+| Knowledge no longer valid | `delete` |
 
 ## OUTPUT FORMAT
 
