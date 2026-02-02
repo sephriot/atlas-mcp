@@ -13,7 +13,7 @@ const INSTRUCTIONS: &str = r#"Atlas MCP - Long-term memory for AI agents.
 
 WORKFLOW:
 1. SEARCH first - Before any task, search for relevant patterns/gotchas/decisions
-2. READ full atoms - Use get_atom for each relevant search result
+2. READ full atoms - Use get for each relevant search result
 3. APPLY knowledge - Let retrieved atoms constrain your approach
 4. RECORD learnings - Use upsert when you discover something reusable
 5. LINK related atoms - Use link to connect related knowledge
@@ -34,7 +34,7 @@ LINKING:
 - Links are directed: A links to B does NOT mean B links to A
 - Cross-project links supported within same org
 
-CONTEXT: Automatically detected from git remote (org/project). Use get_context to verify.
+CONTEXT: Automatically detected from git remote (org/project). Use context to verify.
 
 CITATION: Reference atom IDs in your reasoning, e.g., [K-000042]
 
@@ -54,9 +54,9 @@ impl AtlasServer {
     pub fn new() -> Self {
         let mut tool_router = Self::tool_router();
 
-        // Remove enable_local_storage tool in HTTP mode (symlinks don't make sense remotely)
+        // Remove enable_local tool in HTTP mode (symlinks don't make sense remotely)
         if std::env::var("ATLAS_HTTP_MODE").is_ok() {
-            tool_router.remove_route("enable_local_storage");
+            tool_router.remove_route("enable_local");
         }
 
         Self { tool_router }
@@ -85,10 +85,7 @@ impl AtlasServer {
     #[tool(
         description = "Get full atom content by ID. Accepts org/project/id, project/id, or bare id (context fills gaps)."
     )]
-    async fn get_atom(
-        &self,
-        params: Parameters<GetAtomRequest>,
-    ) -> Result<CallToolResult, McpError> {
+    async fn get(&self, params: Parameters<GetAtomRequest>) -> Result<CallToolResult, McpError> {
         let atom = get_atom(params.0).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&atom).unwrap_or_default(),
@@ -98,7 +95,7 @@ impl AtlasServer {
     #[tool(
         description = "List atoms with optional filtering by type, tags, and confidence. Optionally filter by scope (e.g., 'acme/backend'). Default: lists detected project only."
     )]
-    async fn list_atoms(
+    async fn atoms(
         &self,
         params: Parameters<ListAtomsRequest>,
     ) -> Result<CallToolResult, McpError> {
@@ -111,7 +108,7 @@ impl AtlasServer {
     #[tool(
         description = "Delete an atom by ID. Accepts org/project/id, project/id, or bare id (context fills gaps)."
     )]
-    async fn delete_atom(
+    async fn delete(
         &self,
         params: Parameters<DeleteAtomRequest>,
     ) -> Result<CallToolResult, McpError> {
@@ -144,7 +141,7 @@ impl AtlasServer {
     #[tool(
         description = "Enable local storage for a project. Creates .atlas/ in project root and symlinks from ~/.atlas, making atoms version-controllable via git."
     )]
-    async fn enable_local_storage(
+    async fn enable_local(
         &self,
         params: Parameters<EnableLocalStorageRequest>,
     ) -> Result<CallToolResult, McpError> {
@@ -155,7 +152,7 @@ impl AtlasServer {
     }
 
     #[tool(description = "List all projects across all organizations.")]
-    async fn list_projects(&self) -> Result<CallToolResult, McpError> {
+    async fn projects(&self) -> Result<CallToolResult, McpError> {
         let results = list_projects().map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&results).unwrap_or_default(),
@@ -165,7 +162,7 @@ impl AtlasServer {
     #[tool(
         description = "Get detected project context (org, project, cwd). In HTTP mode, use X-Atlas-Org and X-Atlas-Project headers to override."
     )]
-    async fn get_context(&self, extensions: Extensions) -> Result<CallToolResult, McpError> {
+    async fn context(&self, extensions: Extensions) -> Result<CallToolResult, McpError> {
         let ctx = get_context(extensions).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&ctx).unwrap_or_default(),
