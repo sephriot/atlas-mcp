@@ -18,16 +18,39 @@ Capture reusable learnings in Atlas.
 
 ## Workflow
 
-1. **Search first** - Avoid duplicates with `mcp__atlas__search`
+1. **Search first** - Avoid duplicates with `atlas search <query>`
 2. **Evaluate** - Is this reusable, non-obvious, stable, actionable?
-3. **Create atom** with `mcp__atlas__upsert`:
-   - `title`: Clear, searchable name
-   - `type`: gotcha, recipe, decision, or note
-   - `summary`: The knowledge (markdown supported)
-   - `confidence`: high, medium, or low
-   - `tags`: Keywords for searchability (JSON array)
-   - `sources`: Relevant file paths (JSON array)
-4. **Link related atoms** with `mcp__atlas__link` if applicable
+3. **Create atom** with `atlas upsert`:
+   - `--title`: Clear, searchable name
+   - `--type`: gotcha, recipe, decision, or note
+   - `--summary`: The knowledge (markdown supported)
+   - `--confidence`: high, medium, or low
+   - `--tag`: Keywords for searchability (repeatable)
+   - `--source`: Relevant file paths (repeatable)
+4. **Link related atoms** with `atlas link <SOURCE> <TARGET>` if applicable
+
+## CLI Commands
+
+**Search for duplicates:**
+```bash
+atlas search "error handling"
+```
+
+**Create new atom:**
+```bash
+atlas upsert \
+  --title "API rate limits require exponential backoff" \
+  --type gotcha \
+  --confidence high \
+  --summary "The external API enforces strict rate limits..." \
+  --tag api --tag rate-limiting \
+  --source src/api/client.rs
+```
+
+**Link related atoms:**
+```bash
+atlas link K-000012 K-000045
+```
 
 ## Quality Criteria
 

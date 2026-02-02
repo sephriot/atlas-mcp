@@ -1,0 +1,28 @@
+{
+  "description": "Atlas LTM integration - automatic knowledge retrieval and intelligent recording",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/retrieve-knowledge.py",
+            "timeout": 30,
+            "statusMessage": "Searching Atlas for relevant knowledge..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are evaluating whether this Claude Code session produced knowledge worth recording to Atlas (long-term memory).\n\nSteps:\n1. Read the transcript at $ARGUMENTS.transcript_path to understand what work was done\n2. Identify any valuable knowledge (patterns, gotchas, decisions, facts)\n3. If valuable knowledge exists, search Atlas using `atlas search` to check for similar existing atoms\n4. Decide:\n   - If similar atom exists: suggest UPDATE with its ID\n   - If no similar atom: suggest CREATE new\n   - If knowledge already captured adequately: do nothing\n\nResponse format:\n- CREATE: {\"ok\": false, \"reason\": \"Create Atlas atom: [type] - [title] - [summary]\"}\n- UPDATE: {\"ok\": false, \"reason\": \"Update Atlas atom [ID]: [what to add/change]\"}\n- Nothing: {\"ok\": true}\n\nBe selective - only suggest recording if the knowledge is reusable, non-obvious, and stable.",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}
