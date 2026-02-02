@@ -100,7 +100,10 @@ Use these Atlas operations:
 | Operation | When to use |
 |-----------|-------------|
 | `search` | Find existing atoms before creating new ones |
-| `get_atom` | Read full content of a relevant atom |
+| `get` | Read full content of a relevant atom |
 | `upsert` | Create new atom (after user confirmation) |
-| `list_atoms` | Browse atoms by type or tags |
+| `atoms` | Browse atoms by type or tags |
 | `link` | Connect related atoms |
+| `unlink` | Remove connections between atoms |
+| `delete` | Remove obsolete atoms |
+| `context` | Verify current org/project detection |
