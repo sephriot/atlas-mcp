@@ -100,9 +100,9 @@ async fn run_http_server(_server: AtlasServer, port: u16) -> anyhow::Result<()> 
     let session_manager = Arc::new(LocalSessionManager::default());
     let service = StreamableHttpService::new(|| Ok(AtlasServer::new()), session_manager, config);
 
-    let app = axum::Router::new().nest_service("/", service);
+    let app = axum::Router::new().fallback_service(service);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     eprintln!("Atlas MCP server listening on http://{}", addr);

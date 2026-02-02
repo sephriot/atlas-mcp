@@ -1,0 +1,12 @@
+services:
+  atlas-mcp:
+    build: .
+    ports:
+      - "3333:3333"
+    volumes:
+      - ./data:/data
+    environment:
+      - ATLAS_STORAGE=/data
+      # Optional: Set org/project context
+      # - ATLAS_ORG=myorg
+      # - ATLAS_PROJECT=myproject
