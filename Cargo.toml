@@ -1,5 +1,5 @@
 [package]
-name = "atlas-mcp"
+name = "atlas"
 version = "0.1.0"
 edition = "2021"
 description = "Centralized knowledge management MCP server"
