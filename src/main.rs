@@ -1,3 +1,4 @@
+mod cli;
 mod config;
 mod context;
 mod error;
@@ -11,65 +12,76 @@ mod tools;
 use clap::Parser;
 use rmcp::ServiceExt;
 
+use cli::Commands;
 use server::AtlasServer;
 
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "atlas-mcp")]
-#[command(about = "Atlas MCP - Centralized knowledge management server")]
+#[command(name = "atlas")]
+#[command(about = "Atlas - Long-term memory for AI agents")]
 #[command(version)]
-struct Args {
-    /// Run HTTP/SSE server on specified port (localhost only)
-    #[arg(long)]
-    http: Option<u16>,
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
 
     /// Storage path for knowledge atoms (default: ~/.atlas)
-    #[arg(long, short = 's')]
+    #[arg(long, short = 's', global = true)]
     storage: Option<PathBuf>,
 
     /// Organization name (requires --project)
-    #[arg(long, requires = "project")]
+    #[arg(long, global = true, requires = "project")]
     org: Option<String>,
 
     /// Project name (requires --org)
-    #[arg(long, requires = "org")]
+    #[arg(long, global = true, requires = "org")]
     project: Option<String>,
 
     /// Project root directory for repo storage mode (where .atlas/ is created)
-    #[arg(long)]
+    #[arg(long, global = true)]
     project_root: Option<PathBuf>,
+
+    /// Output as JSON instead of YAML
+    #[arg(long, global = true)]
+    json: bool,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
     // Set storage path via env var if provided via CLI
-    if let Some(ref path) = args.storage {
+    if let Some(ref path) = cli.storage {
         std::env::set_var("ATLAS_STORAGE", path);
     }
 
     // Set org/project context via env vars if provided via CLI
-    if let (Some(ref org), Some(ref project)) = (&args.org, &args.project) {
+    if let (Some(ref org), Some(ref project)) = (&cli.org, &cli.project) {
         std::env::set_var("ATLAS_ORG", org);
         std::env::set_var("ATLAS_PROJECT", project);
     }
 
     // Set project root for repo storage mode
-    if let Some(ref path) = args.project_root {
+    if let Some(ref path) = cli.project_root {
         std::env::set_var("ATLAS_PROJECT_ROOT", path);
     }
 
-    let server = AtlasServer::new();
-
-    if let Some(port) = args.http {
-        // Signal HTTP mode for tool filtering
-        std::env::set_var("ATLAS_HTTP_MODE", "1");
-        let server = AtlasServer::new(); // Recreate after setting env var
-        run_http_server(server, port).await
-    } else {
-        run_stdio_server(server).await
+    match cli.command {
+        None | Some(Commands::Serve { http: None }) => {
+            // Default: run MCP server on stdio
+            let server = AtlasServer::new();
+            run_stdio_server(server).await
+        }
+        Some(Commands::Serve { http: Some(port) }) => {
+            // HTTP mode
+            std::env::set_var("ATLAS_HTTP_MODE", "1");
+            let server = AtlasServer::new();
+            run_http_server(server, port).await
+        }
+        Some(cmd) => {
+            // CLI command mode
+            cli::run(cmd, cli.json)
+        }
     }
 }
 
