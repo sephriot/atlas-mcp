@@ -9,5 +9,5 @@ pub use atoms::{
     DeleteAtomRequest, EnableLocalStorageRequest, GetAtomRequest, ListAtomsRequest,
 };
 pub use link::{link, unlink, LinkRequest};
-pub use search::{search, SearchRequest};
+pub use search::{search, SearchRequest, SearchResponse};
 pub use upsert::{upsert, UpsertRequest};

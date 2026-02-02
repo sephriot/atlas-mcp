@@ -36,12 +36,14 @@ def main():
         sys.exit(0)
 
     # Search Atlas using the prompt
-    search_output = run_atlas(["search", prompt, "--limit", "5", "--json"])
+    search_output = run_atlas(["search", prompt, "--page-size", "5", "--json"])
     if not search_output:
         sys.exit(0)
 
     try:
-        results = json.loads(search_output)
+        response = json.loads(search_output)
+        # Handle new paginated response format
+        results = response.get("results", []) if isinstance(response, dict) else response
     except json.JSONDecodeError:
         sys.exit(0)
 

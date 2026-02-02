@@ -34,9 +34,13 @@ pub struct SearchRequest {
     #[serde(default)]
     pub confidence: Option<Confidence>,
 
-    /// Maximum number of results (default: 20)
+    /// Page number (1-indexed, default: 1)
     #[serde(default, deserialize_with = "deserialize_optional_usize")]
-    pub limit: Option<usize>,
+    pub page: Option<usize>,
+
+    /// Results per page (default: 20)
+    #[serde(default, deserialize_with = "deserialize_optional_usize")]
+    pub page_size: Option<usize>,
 
     /// Scope filter: org name or org/project path. Examples: "acme", "acme/backend"
     #[serde(default)]
@@ -69,14 +73,30 @@ impl SearchResult {
     }
 }
 
+/// Search response with pagination metadata.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct SearchResponse {
+    /// Matching atoms for this page
+    pub results: Vec<SearchResult>,
+    /// Total number of matching atoms
+    pub total: usize,
+    /// Current page number (1-indexed)
+    pub page: usize,
+    /// Results per page
+    pub page_size: usize,
+    /// Total number of pages
+    pub total_pages: usize,
+}
+
 /// Search atoms in the index.
-pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
+pub fn search(req: SearchRequest) -> Result<SearchResponse, AtlasError> {
     let ctx = detect_context()?;
 
     // Parse scope to determine org and optional project filter
     let (search_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx)?;
 
-    let limit = req.limit.unwrap_or(20);
+    let page = req.page.unwrap_or(1).max(1); // Ensure minimum page 1
+    let page_size = req.page_size.unwrap_or(20);
     let query_terms = req
         .query
         .as_ref()
@@ -167,10 +187,32 @@ pub fn search(req: SearchRequest) -> Result<Vec<SearchResult>, AtlasError> {
     // Sort by score descending
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Apply limit
-    let results: Vec<SearchResult> = results.into_iter().take(limit).map(|(r, _)| r).collect();
+    // Capture total BEFORE pagination
+    let total = results.len();
+    let total_pages = if total == 0 {
+        0
+    } else {
+        (total + page_size - 1) / page_size // Ceiling division
+    };
 
-    Ok(results)
+    // Calculate offset from page
+    let offset = (page - 1) * page_size;
+
+    // Apply pagination
+    let results: Vec<SearchResult> = results
+        .into_iter()
+        .skip(offset)
+        .take(page_size)
+        .map(|(r, _)| r)
+        .collect();
+
+    Ok(SearchResponse {
+        results,
+        total,
+        page,
+        page_size,
+        total_pages,
+    })
 }
 
 fn calculate_score(entry: &IndexEntry, query_terms: &[String]) -> f32 {
@@ -373,5 +415,74 @@ mod tests {
         let cross_project_score = base_score * CROSS_PROJECT_SCORE_MULTIPLIER;
         assert_eq!(cross_project_score, 7.0);
         assert!(base_score > cross_project_score);
+    }
+
+    #[test]
+    fn test_search_response_pagination_metadata() {
+        let response = SearchResponse {
+            results: vec![],
+            total: 42,
+            page: 2,
+            page_size: 10,
+            total_pages: 5,
+        };
+        assert_eq!(response.total, 42);
+        assert_eq!(response.page, 2);
+        assert_eq!(response.page_size, 10);
+        assert_eq!(response.total_pages, 5);
+    }
+
+    #[test]
+    fn test_search_response_with_results() {
+        let entry = make_entry("K-000001", "Test", vec!["tag1"]);
+        let result = SearchResult::from_entry(&entry, 5.0, "org", "proj");
+        let response = SearchResponse {
+            results: vec![result],
+            total: 1,
+            page: 1,
+            page_size: 20,
+            total_pages: 1,
+        };
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].title, "Test");
+    }
+
+    #[test]
+    fn test_total_pages_calculation() {
+        // 21 results / 20 page_size = 2 pages (ceiling division)
+        let total = 21;
+        let page_size = 20;
+        let total_pages = (total + page_size - 1) / page_size;
+        assert_eq!(total_pages, 2);
+
+        // 20 results / 20 page_size = 1 page
+        let total = 20;
+        let total_pages = (total + page_size - 1) / page_size;
+        assert_eq!(total_pages, 1);
+
+        // 1 result / 20 page_size = 1 page
+        let total = 1;
+        let total_pages = (total + page_size - 1) / page_size;
+        assert_eq!(total_pages, 1);
+    }
+
+    #[test]
+    fn test_page_offset_calculation() {
+        let page_size = 10;
+
+        // Page 1 should have offset 0
+        let page = 1;
+        let offset = (page - 1) * page_size;
+        assert_eq!(offset, 0);
+
+        // Page 2 should have offset 10
+        let page = 2;
+        let offset = (page - 1) * page_size;
+        assert_eq!(offset, 10);
+
+        // Page 3 should have offset 20
+        let page = 3;
+        let offset = (page - 1) * page_size;
+        assert_eq!(offset, 20);
     }
 }

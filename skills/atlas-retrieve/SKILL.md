@@ -18,7 +18,7 @@ Retrieve relevant knowledge from Atlas before taking action.
 
 **Broad discovery:**
 ```bash
-atlas search "error handling" --limit 10
+atlas search "error handling" --page-size 10
 ```
 
 **Type-specific:**

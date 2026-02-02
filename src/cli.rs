@@ -37,9 +37,13 @@ pub enum Commands {
         #[arg(long, short = 'c')]
         confidence: Option<Confidence>,
 
-        /// Maximum number of results
-        #[arg(long, short = 'l', default_value = "20")]
-        limit: usize,
+        /// Page number (1-indexed)
+        #[arg(long, short = 'p', default_value = "1")]
+        page: usize,
+
+        /// Results per page
+        #[arg(long, short = 's', default_value = "20")]
+        page_size: usize,
 
         /// Scope filter: org name or org/project path
         #[arg(long)]
@@ -172,7 +176,8 @@ pub fn run(cmd: Commands, json: bool) -> anyhow::Result<()> {
             types,
             tag,
             confidence,
-            limit,
+            page,
+            page_size,
             scope,
         } => {
             let query = resolve_input(query)?;
@@ -181,7 +186,8 @@ pub fn run(cmd: Commands, json: bool) -> anyhow::Result<()> {
                 types: if types.is_empty() { None } else { Some(types) },
                 tags: if tag.is_empty() { None } else { Some(tag) },
                 confidence,
-                limit: Some(limit),
+                page: Some(page),
+                page_size: Some(page_size),
                 scope,
             };
             let results = search(req)?;
