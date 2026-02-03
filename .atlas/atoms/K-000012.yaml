@@ -1,0 +1,31 @@
+id: K-000012
+title: Adding Fields to Index and Search Results
+type: recipe
+confidence: high
+summary: Pattern for propagating new atom fields through the index to search results.
+details: |-
+  When adding a new field from `Atom` to search results:
+
+  1. **IndexEntry** (`src/models/index.rs`):
+     - Add field to struct with `#[serde(default, skip_serializing_if = "Vec::is_empty")]` for optional fields
+     - Update `from_atom()` to copy the field
+     - Update test helper `make_entry()` to include the field
+
+  2. **SearchResult** (`src/tools/search.rs`):
+     - Add field to struct (same serde attributes)
+     - Update `from_entry()` to copy from IndexEntry
+     - Update test helpers `make_entry()` and `make_entry_with_sources()`
+
+  The `#[serde(default)]` attribute handles backwards compatibility - existing index files without the new field will deserialize with empty vectors.
+tags:
+- search
+- index
+- serde
+- migration
+- recipe
+sources:
+- src/models/index.rs
+- src/tools/search.rs
+links:
+- K-000006
+updated_at: 2026-02-03

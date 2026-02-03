@@ -1,4 +1,4 @@
-next_id: 12
+next_id: 13
 entries:
 - id: K-000001
   title: Atlas MCP Project Overview
@@ -123,3 +123,16 @@ entries:
   - json-schema
   - rust
   - pattern
+- id: K-000012
+  title: Adding Fields to Index and Search Results
+  type: recipe
+  confidence: high
+  tags:
+  - search
+  - index
+  - serde
+  - migration
+  - recipe
+  sources:
+  - src/models/index.rs
+  - src/tools/search.rs
