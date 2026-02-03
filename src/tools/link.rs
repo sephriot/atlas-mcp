@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::context::detect_context;
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
-use crate::storage::{read_atom, write_atom};
+use crate::models::IndexEntry;
+use crate::storage::{load_index, read_atom, save_index, write_atom};
 
 use super::reference::{format_atom_reference, parse_atom_reference};
 
@@ -120,6 +121,11 @@ pub fn link(req: LinkRequest) -> Result<LinkResponse, AtlasError> {
     source_atom.updated_at = Utc::now().date_naive();
     write_atom(&source_ref.org, &source_ref.project, &source_atom)?;
 
+    // Update index
+    let mut index = load_index(&source_ref.org, &source_ref.project)?;
+    index.upsert_entry(IndexEntry::from_atom(&source_atom));
+    save_index(&source_ref.org, &source_ref.project, &index)?;
+
     Ok(LinkResponse {
         source: format_atom_reference(&source_ref.org, &source_ref.project, &source_ref.id),
         target: format_atom_reference(&target_ref.org, &target_ref.project, &target_ref.id),
@@ -162,6 +168,12 @@ pub fn unlink(req: LinkRequest) -> Result<UnlinkResponse, AtlasError> {
         source_atom.links.remove(pos);
         source_atom.updated_at = Utc::now().date_naive();
         write_atom(&source_ref.org, &source_ref.project, &source_atom)?;
+
+        // Update index
+        let mut index = load_index(&source_ref.org, &source_ref.project)?;
+        index.upsert_entry(IndexEntry::from_atom(&source_atom));
+        save_index(&source_ref.org, &source_ref.project, &index)?;
+
         true
     } else {
         false
