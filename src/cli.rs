@@ -318,7 +318,7 @@ fn read_stdin() -> Result<String, AtlasError> {
     let mut buffer = String::new();
     io::stdin()
         .read_to_string(&mut buffer)
-        .map_err(|e| AtlasError::Io(e))?;
+        .map_err(AtlasError::Io)?;
     Ok(buffer.trim().to_string())
 }
 

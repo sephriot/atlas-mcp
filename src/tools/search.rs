@@ -192,11 +192,7 @@ pub fn search(req: SearchRequest) -> Result<SearchResponse, AtlasError> {
 
     // Capture total BEFORE pagination
     let total = results.len();
-    let total_pages = if total == 0 {
-        0
-    } else {
-        (total + page_size - 1) / page_size // Ceiling division
-    };
+    let total_pages = total.div_ceil(page_size);
 
     // Calculate offset from page
     let offset = (page - 1) * page_size;
@@ -455,19 +451,19 @@ mod tests {
     #[test]
     fn test_total_pages_calculation() {
         // 21 results / 20 page_size = 2 pages (ceiling division)
-        let total = 21;
-        let page_size = 20;
-        let total_pages = (total + page_size - 1) / page_size;
+        let total: usize = 21;
+        let page_size: usize = 20;
+        let total_pages = total.div_ceil(page_size);
         assert_eq!(total_pages, 2);
 
         // 20 results / 20 page_size = 1 page
-        let total = 20;
-        let total_pages = (total + page_size - 1) / page_size;
+        let total: usize = 20;
+        let total_pages = total.div_ceil(page_size);
         assert_eq!(total_pages, 1);
 
         // 1 result / 20 page_size = 1 page
-        let total = 1;
-        let total_pages = (total + page_size - 1) / page_size;
+        let total: usize = 1;
+        let total_pages = total.div_ceil(page_size);
         assert_eq!(total_pages, 1);
     }
 
