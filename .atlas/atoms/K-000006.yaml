@@ -10,4 +10,6 @@ tags:
 - scoring
 sources:
 - src/tools/search.rs
-updated_at: 2026-01-28
+links:
+- K-000012
+updated_at: 2026-02-03

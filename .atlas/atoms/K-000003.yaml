@@ -25,4 +25,6 @@ sources:
 - src/storage/atoms.rs
 - src/storage/index.rs
 - src/models/atom.rs
-updated_at: 2026-01-28
+links:
+- K-000005
+updated_at: 2026-02-03

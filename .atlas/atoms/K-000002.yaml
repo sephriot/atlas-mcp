@@ -34,4 +34,6 @@ tags:
 - rust
 sources:
 - src/server.rs
-updated_at: 2026-01-28
+links:
+- K-000008
+updated_at: 2026-02-03
