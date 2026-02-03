@@ -108,7 +108,7 @@ Always indicate your knowledge context:
 
 **Broad discovery:**
 ```json
-{"query": "error handling", "limit": 10}
+{"query": "error handling", "page_size": 10}
 ```
 
 **Type-specific:**
@@ -124,6 +124,7 @@ Always indicate your knowledge context:
 ## REMEMBER
 
 - Atlas is your memory. Use it.
+- **Search returns summaries only** - always call `get <atom-id>` to retrieve full atom content before applying knowledge.
 - Search costs nothing. Assumptions cost rework.
 - If you solved something non-trivial, record it.
 - Knowledge compounds. Each atom makes future work faster.
