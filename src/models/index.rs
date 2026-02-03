@@ -26,6 +26,10 @@ pub struct IndexEntry {
     /// Source references (file paths or URLs)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<String>,
+
+    /// Related atoms
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<String>,
 }
 
 impl IndexEntry {
@@ -37,6 +41,7 @@ impl IndexEntry {
             confidence: atom.confidence,
             tags: atom.tags.clone(),
             sources: atom.sources.clone(),
+            links: atom.links.clone(),
         }
     }
 }
@@ -98,6 +103,7 @@ mod tests {
             confidence: Confidence::High,
             tags: vec![],
             sources: vec![],
+            links: vec![],
         }
     }
 

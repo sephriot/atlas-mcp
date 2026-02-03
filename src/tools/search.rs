@@ -58,6 +58,8 @@ pub struct SearchResult {
     pub confidence: Confidence,
     pub tags: Vec<String>,
     pub score: f32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<String>,
 }
 
 impl SearchResult {
@@ -69,6 +71,7 @@ impl SearchResult {
             confidence: entry.confidence,
             tags: entry.tags.clone(),
             score,
+            links: entry.links.clone(),
         }
     }
 }
@@ -271,6 +274,7 @@ mod tests {
             confidence: Confidence::High,
             tags: tags.into_iter().map(String::from).collect(),
             sources: vec![],
+            links: vec![],
         }
     }
 
@@ -287,6 +291,7 @@ mod tests {
             confidence: Confidence::High,
             tags: tags.into_iter().map(String::from).collect(),
             sources: sources.into_iter().map(String::from).collect(),
+            links: vec![],
         }
     }
 
