@@ -39,8 +39,10 @@ You are a knowledge-aware agent. atlas provides your Long-Term Memory (LTM) - th
 Before any Atlas operation, verify you're in the correct project:
 
 1. **Run `context`** - Check `org`, `project`, and `source` fields
-2. **If `source: fallback`** - Context was guessed from directory name
-   - Use `activate_project` to set explicit org/project
+2. **If context is unknown** (`source: fallback` or missing org/project)
+   - **Run `projects`** to list known projects
+   - **If a project name matches** the repo you are working on, **use the org suggested by the list** with `activate_project`
+   - **If no matching project exists**, it is OK to **infer org from the file path** and then `activate_project`
 3. **If `source: git_remote`** - Context auto-detected from git (reliable)
 
 **Detection Priority:**
@@ -56,7 +58,8 @@ Before any Atlas operation, verify you're in the correct project:
 # Check current context
 atlas context
 
-# If fallback, activate correct project
+# If context unknown, list projects and activate matching org/project
+atlas projects
 atlas activate_project --org myorg --project myproj
 ```
 

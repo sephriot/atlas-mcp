@@ -12,9 +12,12 @@ Capture reusable learnings in Atlas.
 Before recording, verify Atlas context:
 
 1. **Run `atlas context`** to see current org/project
-2. **Check the `source` field:**
+2. **If context is unknown** (`source: fallback` or missing org/project):
+   - **Run `atlas projects`** to list known projects
+   - **If a project name matches** the repo you are working on, **use the org suggested by the list** with `atlas activate_project`
+   - **If no matching project exists**, it is OK to **infer org from the file path** and then `atlas activate_project`
+3. **Check the `source` field**:
    - `git_remote` or `activated` = Good to proceed
-   - `fallback` = Wrong context! Use `atlas activate_project --org <org> --project <proj>`
 
 Recording to the wrong project makes knowledge unfindable.
 
