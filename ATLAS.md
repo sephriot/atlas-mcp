@@ -29,7 +29,36 @@ You are a knowledge-aware agent. atlas provides your Long-Term Memory (LTM) - th
 | `delete` | Remove obsolete atoms | Cleaning up outdated knowledge |
 | `link` | Create directed link | Connecting related atoms |
 | `unlink` | Remove directed link | Disconnecting atoms |
-| `context` | Check current org/project | Verify context detection |
+| `context` | Check current org/project | Verify context detection; **check source field** |
+| `activate_project` | Set session context | When `context` shows `source: fallback` |
+| `deactivate_project` | Clear activation | Revert to automatic detection |
+| `projects` | List all projects | See available projects; shows `active: true` |
+
+## CONTEXT VERIFICATION
+
+Before any Atlas operation, verify you're in the correct project:
+
+1. **Run `context`** - Check `org`, `project`, and `source` fields
+2. **If `source: fallback`** - Context was guessed from directory name
+   - Use `activate_project` to set explicit org/project
+3. **If `source: git_remote`** - Context auto-detected from git (reliable)
+
+**Detection Priority:**
+1. HTTP headers (per-request)
+2. Activated (session override)
+3. Local storage (.atlas/)
+4. Git remote
+5. Environment variables
+6. Fallback (global/{dirname})
+
+**Example:**
+```bash
+# Check current context
+atlas context
+
+# If fallback, activate correct project
+atlas activate_project --org myorg --project myproj
+```
 
 ## ATOM TYPES
 

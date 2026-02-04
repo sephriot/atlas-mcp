@@ -7,6 +7,17 @@ description: Record new knowledge to Atlas long-term memory. Use after completin
 
 Capture reusable learnings in Atlas.
 
+## Context Check
+
+Before recording, verify Atlas context:
+
+1. **Run `atlas context`** to see current org/project
+2. **Check the `source` field:**
+   - `git_remote` or `activated` = Good to proceed
+   - `fallback` = Wrong context! Use `atlas activate_project --org <org> --project <proj>`
+
+Recording to the wrong project makes knowledge unfindable.
+
 ## Atom Types
 
 | Type | Use for |

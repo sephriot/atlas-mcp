@@ -7,6 +7,17 @@ description: Retrieve knowledge from Atlas long-term memory. Use when starting a
 
 Retrieve relevant knowledge from Atlas before taking action.
 
+## Context Check
+
+Before searching, verify Atlas context:
+
+1. **Run `atlas context`** to see current org/project
+2. **Check the `source` field:**
+   - `git_remote` or `activated` = Good to proceed
+   - `fallback` = Wrong context! Use `atlas activate_project --org <org> --project <proj>`
+
+This prevents searching/recording in the wrong project (e.g., `global/tmp`).
+
 ## Workflow
 
 1. **Extract keywords** from the task/question
