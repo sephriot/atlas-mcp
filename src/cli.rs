@@ -270,14 +270,15 @@ pub fn run(cmd: Commands, json: bool) -> anyhow::Result<()> {
             print_output(&results, json)?;
         }
         Commands::Context => {
-            let ctx = crate::context::detect_context()?;
+            let detected = crate::context::detect_context_full(None, None, None)?;
             let cwd = std::env::current_dir()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| "unknown".to_string());
             let info = ContextOutput {
-                org: ctx.org,
-                project: ctx.project,
+                org: detected.context.org,
+                project: detected.context.project,
                 cwd,
+                source: detected.source,
             };
             print_output(&info, json)?;
         }
@@ -295,6 +296,7 @@ struct ContextOutput {
     org: String,
     project: String,
     cwd: String,
+    source: crate::context::ContextSource,
 }
 
 /// Resolve input: if arg is Some("-") or None and stdin is piped, read from stdin.

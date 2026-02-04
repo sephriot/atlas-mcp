@@ -5,8 +5,9 @@ mod search;
 mod upsert;
 
 pub use atoms::{
-    delete_atom, enable_local_storage, get_atom, get_context, list_atoms, list_projects,
-    DeleteAtomRequest, EnableLocalStorageRequest, GetAtomRequest, ListAtomsRequest,
+    delete_atom, enable_local_storage, get_atom, get_context_with_activation, list_atoms,
+    list_projects, list_projects_with_activation, DeleteAtomRequest, EnableLocalStorageRequest,
+    GetAtomRequest, ListAtomsRequest,
 };
 pub use link::{link, unlink, LinkRequest};
 pub use search::{search, SearchRequest};

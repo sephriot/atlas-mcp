@@ -7,8 +7,8 @@ use rmcp::model::Extensions;
 
 use crate::config::{get_orgs_path, get_project_path};
 use crate::context::{
-    detect_context, detect_context_with_headers, ProjectContext, HEADER_ATLAS_ORG,
-    HEADER_ATLAS_PROJECT,
+    detect_context, detect_context_full, ContextSource, DetectedContext, ProjectContext,
+    HEADER_ATLAS_ORG, HEADER_ATLAS_PROJECT,
 };
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
@@ -17,6 +17,59 @@ use crate::serde_helpers::deserialize_optional_usize;
 use crate::storage::{delete_atom_file, load_index, read_atom as storage_read_atom, save_index};
 
 use super::reference::{format_atom_reference, parse_atom_reference, parse_scope};
+
+// ============================================================================
+// Context Hint Support
+// ============================================================================
+
+/// Hint about context detection for the user.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct ContextHint {
+    pub message: String,
+    pub source: String,
+}
+
+/// Generic response wrapper that includes an optional context hint.
+/// Can be used to wrap any tool response with a context hint.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct WithContext<T: Serialize> {
+    #[serde(flatten)]
+    pub data: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_hint: Option<ContextHint>,
+}
+
+#[allow(dead_code)]
+impl<T: Serialize> WithContext<T> {
+    pub fn new(data: T, hint: Option<ContextHint>) -> Self {
+        Self {
+            data,
+            context_hint: hint,
+        }
+    }
+}
+
+/// Create a context hint if the source is fallback.
+pub fn make_context_hint(source: &ContextSource) -> Option<ContextHint> {
+    match source {
+        ContextSource::Fallback => Some(ContextHint {
+            message:
+                "Context detected via fallback. Use activate_project to set explicit org/project."
+                    .to_string(),
+            source: "fallback".to_string(),
+        }),
+        _ => None,
+    }
+}
+
+/// Helper function to detect context with activation support.
+#[allow(dead_code)]
+pub fn detect_with_activation(
+    activated: Option<&ProjectContext>,
+) -> Result<DetectedContext, AtlasError> {
+    detect_context_full(None, None, activated)
+}
 
 // ============================================================================
 // get_atom
@@ -329,10 +382,17 @@ pub struct ProjectInfo {
     pub org: String,
     pub project: String,
     pub atom_count: usize,
+    /// True if this is the currently active project
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub active: bool,
 }
 
 /// List all projects.
-pub fn list_projects() -> Result<Vec<ProjectInfo>, AtlasError> {
+///
+/// Takes optional activated context to mark the active project.
+pub fn list_projects_with_activation(
+    activated: Option<&ProjectContext>,
+) -> Result<Vec<ProjectInfo>, AtlasError> {
     let orgs_path = get_orgs_path()?;
 
     if !orgs_path.exists() {
@@ -364,15 +424,26 @@ pub fn list_projects() -> Result<Vec<ProjectInfo>, AtlasError> {
             // Count atoms
             let index = load_index(&org_name, &project_name).unwrap_or_default();
 
+            // Check if this is the active project
+            let active = activated
+                .map(|a| a.org == org_name && a.project == project_name)
+                .unwrap_or(false);
+
             projects.push(ProjectInfo {
                 org: org_name.clone(),
                 project: project_name,
                 atom_count: index.entries.len(),
+                active,
             });
         }
     }
 
     Ok(projects)
+}
+
+/// List all projects (without activation info).
+pub fn list_projects() -> Result<Vec<ProjectInfo>, AtlasError> {
+    list_projects_with_activation(None)
 }
 
 // ============================================================================
@@ -385,26 +456,48 @@ pub struct ContextInfo {
     pub org: String,
     pub project: String,
     pub cwd: String,
+    /// Source of context detection
+    pub source: ContextSource,
+    /// Hint for the user if using fallback detection
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<ContextHint>,
 }
 
-/// Get detected project context.
+/// Get detected project context with source info.
 ///
 /// In HTTP mode, extracts X-Atlas-Org and X-Atlas-Project headers from request.
-pub fn get_context(extensions: Extensions) -> Result<ContextInfo, AtlasError> {
-    let ctx = detect_context_from_extensions(&extensions)?;
+/// Takes optional activated context for session-level override.
+pub fn get_context_with_activation(
+    extensions: Extensions,
+    activated: Option<&ProjectContext>,
+) -> Result<ContextInfo, AtlasError> {
+    let detected = detect_context_from_extensions_full(&extensions, activated)?;
     let cwd = std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
 
+    let hint = make_context_hint(&detected.source);
+
     Ok(ContextInfo {
-        org: ctx.org,
-        project: ctx.project,
+        org: detected.context.org,
+        project: detected.context.project,
         cwd,
+        source: detected.source,
+        hint,
     })
 }
 
-/// Extract context from Extensions, checking HTTP headers if available.
-fn detect_context_from_extensions(extensions: &Extensions) -> Result<ProjectContext, AtlasError> {
+/// Get detected project context (without activation).
+#[allow(dead_code)]
+pub fn get_context(extensions: Extensions) -> Result<ContextInfo, AtlasError> {
+    get_context_with_activation(extensions, None)
+}
+
+/// Extract context from Extensions with full detection and source tracking.
+fn detect_context_from_extensions_full(
+    extensions: &Extensions,
+    activated: Option<&ProjectContext>,
+) -> Result<DetectedContext, AtlasError> {
     // Try to extract HTTP headers if running in HTTP mode
     if let Some(parts) = extensions.get::<http::request::Parts>() {
         let org = parts
@@ -416,11 +509,17 @@ fn detect_context_from_extensions(extensions: &Extensions) -> Result<ProjectCont
             .get(HEADER_ATLAS_PROJECT)
             .and_then(|v| v.to_str().ok());
 
-        return detect_context_with_headers(org, project);
+        return detect_context_full(org, project, activated);
     }
 
-    // No HTTP parts available (stdio mode), use standard detection
-    detect_context()
+    // No HTTP parts available (stdio mode), use detection with activation
+    detect_context_full(None, None, activated)
+}
+
+/// Extract context from Extensions, checking HTTP headers if available (legacy).
+#[allow(dead_code)]
+fn detect_context_from_extensions(extensions: &Extensions) -> Result<ProjectContext, AtlasError> {
+    Ok(detect_context_from_extensions_full(extensions, None)?.context)
 }
 
 // ============================================================================

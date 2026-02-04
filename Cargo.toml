@@ -24,3 +24,4 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 http = "1.4.0"
+parking_lot = "0.12"
