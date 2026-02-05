@@ -239,6 +239,9 @@ This allows:
 ## Development
 
 ```bash
+# Set up git hooks (auto-formats code on commit)
+git config core.hooksPath .githooks
+
 # Run tests
 cargo test
 

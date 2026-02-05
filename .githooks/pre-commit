@@ -1,0 +1,10 @@
+#!/bin/sh
+# Pre-commit hook to format Rust code
+
+# Run cargo fmt on staged Rust files
+cargo fmt
+
+# Re-add any files that were reformatted
+git diff --name-only --cached | grep '\.rs$' | xargs -r git add
+
+exit 0
