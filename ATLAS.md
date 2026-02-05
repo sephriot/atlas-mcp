@@ -103,25 +103,25 @@ atlas activate_project --org myorg --project myproj
 3. **Hit an unexpected issue** - error, edge case, or counterintuitive behavior
 4. **Made a decision** - chose approach A over B for specific reasons
 
-**Action:** Proactively surface what was learned:
+**Action:** Immediately record what was learned - **no confirmation needed**:
 
-> "While [doing X / reading Y], I noticed [Z]. Worth recording as a [type]?"
-
-Provide a concrete suggestion - title, type, one-line summary. Don't wait to be asked.
-
-**Examples:**
-- Bug fix → gotcha about root cause
-- Read new module → note about its conventions or recipe for common operations
-- Unexpected behavior → gotcha
-- Chose library/pattern → decision with rationale
-
-**After user confirms, update Atlas:**
+1. **Determine atom type** based on what was learned
+2. **Upsert immediately** with appropriate type, tags, and content
+3. **Report briefly** what was recorded (atom ID and title)
 
 | Scenario | Action |
 |----------|--------|
 | Learned something new | `upsert` a new atom |
 | Found incomplete knowledge | `upsert` to update existing |
 | Knowledge no longer valid | `delete` |
+
+**Examples:**
+- Bug fix → upsert gotcha about root cause
+- Read new module → upsert note about its conventions
+- Unexpected behavior → upsert gotcha
+- Chose library/pattern → upsert decision with rationale
+
+**You have full autonomy to manage Atlas knowledge.** Record learnings as they occur without waiting for permission.
 
 ## OUTPUT FORMAT
 
