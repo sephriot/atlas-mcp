@@ -138,8 +138,7 @@ impl AtlasServer {
     )]
     async fn search(&self, params: Parameters<SearchRequest>) -> Result<CallToolResult, McpError> {
         let activated = self.get_activated_context();
-        let results =
-            search_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
+        let results = search_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&results).unwrap_or_default(),
         )]))
@@ -429,10 +428,7 @@ mod tests {
             "upsert id should include activated org/project"
         );
 
-        let bare_id = id
-            .split('/')
-            .last()
-            .expect("id should contain atom id");
+        let bare_id = id.split('/').last().expect("id should contain atom id");
 
         // get_atom should resolve bare ids against activated context.
         let get_result = server
@@ -460,7 +456,10 @@ mod tests {
             .expect("list atoms should succeed");
         let list_json = extract_json_text(&list_result);
         assert!(
-            list_json.as_array().map(|items| !items.is_empty()).unwrap_or(false),
+            list_json
+                .as_array()
+                .map(|items| !items.is_empty())
+                .unwrap_or(false),
             "list atoms should include the created atom"
         );
 
@@ -546,7 +545,10 @@ mod tests {
             .await
             .expect("delete should succeed");
         let delete_json = extract_json_text(&delete_result);
-        assert_eq!(delete_json.get("deleted").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(
+            delete_json.get("deleted").and_then(|v| v.as_bool()),
+            Some(true)
+        );
 
         // Restore env.
         match orig_storage {
