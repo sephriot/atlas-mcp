@@ -1,4 +1,4 @@
-next_id: 13
+next_id: 15
 entries:
 - id: K-000001
   title: Atlas MCP Project Overview
@@ -144,3 +144,26 @@ entries:
   - src/tools/search.rs
   links:
   - K-000006
+- id: K-000013
+  title: Activation works for all tools
+  type: note
+  confidence: medium
+  tags:
+  - activation
+  - smoke-test
+- id: K-000014
+  title: Upsert (and other tools) must use activated project context
+  type: gotcha
+  confidence: high
+  tags:
+  - activation
+  - context
+  - upsert
+  - tools
+  - mcp
+  sources:
+  - src/server.rs
+  - src/tools/upsert.rs
+  - src/tools/atoms.rs
+  - src/tools/search.rs
+  - src/tools/link.rs

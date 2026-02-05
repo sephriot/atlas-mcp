@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::config::list_org_projects;
-use crate::context::detect_context;
+use crate::context::{detect_context_full, ProjectContext};
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
 use crate::models::{AtomType, Confidence, IndexEntry};
@@ -93,7 +93,15 @@ pub struct SearchResponse {
 
 /// Search atoms in the index.
 pub fn search(req: SearchRequest) -> Result<SearchResponse, AtlasError> {
-    let ctx = detect_context()?;
+    search_with_activation(req, None)
+}
+
+/// Search atoms in the index with optional activated context.
+pub fn search_with_activation(
+    req: SearchRequest,
+    activated: Option<&ProjectContext>,
+) -> Result<SearchResponse, AtlasError> {
+    let ctx = detect_context_full(None, None, activated)?.context;
 
     // Parse scope to determine org and optional project filter
     let (search_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx)?;

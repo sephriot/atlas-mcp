@@ -1,0 +1,9 @@
+id: K-000013
+title: Activation works for all tools
+type: note
+confidence: medium
+summary: 'Smoke test: upsert after activation should land in sephriot/atlas-mcp.'
+tags:
+- activation
+- smoke-test
+updated_at: 2026-02-05

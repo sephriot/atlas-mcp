@@ -1,0 +1,19 @@
+id: K-000014
+title: Upsert (and other tools) must use activated project context
+type: gotcha
+confidence: high
+summary: Context-dependent tools default to auto-detection unless explicitly passed the activated project context; this caused upsert to create atoms in the wrong org/project until wired through the server.
+details: When a session calls activate_project, tools like upsert/search/get/list/delete/link/unlink need to use detect_context_full(..., activated) so bare IDs and new atom creation resolve to the activated org/project.
+tags:
+- activation
+- context
+- upsert
+- tools
+- mcp
+sources:
+- src/server.rs
+- src/tools/upsert.rs
+- src/tools/atoms.rs
+- src/tools/search.rs
+- src/tools/link.rs
+updated_at: 2026-02-05

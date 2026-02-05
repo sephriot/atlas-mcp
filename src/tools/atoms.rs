@@ -7,8 +7,8 @@ use rmcp::model::Extensions;
 
 use crate::config::{get_orgs_path, get_project_path};
 use crate::context::{
-    detect_context, detect_context_full, ContextSource, DetectedContext, ProjectContext,
-    HEADER_ATLAS_ORG, HEADER_ATLAS_PROJECT,
+    detect_context_full, ContextSource, DetectedContext, ProjectContext, HEADER_ATLAS_ORG,
+    HEADER_ATLAS_PROJECT,
 };
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
@@ -83,7 +83,15 @@ pub struct GetAtomRequest {
 
 /// Get a full atom by ID.
 pub fn get_atom(req: GetAtomRequest) -> Result<Atom, AtlasError> {
-    let ctx = detect_context()?;
+    get_atom_with_activation(req, None)
+}
+
+/// Get a full atom by ID with optional activated context.
+pub fn get_atom_with_activation(
+    req: GetAtomRequest,
+    activated: Option<&ProjectContext>,
+) -> Result<Atom, AtlasError> {
+    let ctx = detect_context_full(None, None, activated)?.context;
     let atom_ref = parse_atom_reference(&req.id, &ctx);
 
     let _lock = ProjectLock::acquire(&atom_ref.org, &atom_ref.project)?;
@@ -144,7 +152,15 @@ impl ListAtomResult {
 
 /// List atoms with optional filtering.
 pub fn list_atoms(req: ListAtomsRequest) -> Result<Vec<ListAtomResult>, AtlasError> {
-    let ctx = detect_context()?;
+    list_atoms_with_activation(req, None)
+}
+
+/// List atoms with optional filtering and optional activated context.
+pub fn list_atoms_with_activation(
+    req: ListAtomsRequest,
+    activated: Option<&ProjectContext>,
+) -> Result<Vec<ListAtomResult>, AtlasError> {
+    let ctx = detect_context_full(None, None, activated)?.context;
     let (list_org, scope_project) = parse_scope(req.scope.as_deref(), &ctx)?;
 
     let limit = req.limit.unwrap_or(50);
@@ -222,7 +238,15 @@ pub struct DeleteResult {
 
 /// Delete an atom.
 pub fn delete_atom(req: DeleteAtomRequest) -> Result<DeleteResult, AtlasError> {
-    let ctx = detect_context()?;
+    delete_atom_with_activation(req, None)
+}
+
+/// Delete an atom with optional activated context.
+pub fn delete_atom_with_activation(
+    req: DeleteAtomRequest,
+    activated: Option<&ProjectContext>,
+) -> Result<DeleteResult, AtlasError> {
+    let ctx = detect_context_full(None, None, activated)?.context;
     let atom_ref = parse_atom_reference(&req.id, &ctx);
 
     let _lock = ProjectLock::acquire(&atom_ref.org, &atom_ref.project)?;

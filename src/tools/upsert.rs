@@ -3,7 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::config::get_project_path;
-use crate::context::detect_context;
+use crate::context::{detect_context_full, ProjectContext};
 use crate::error::AtlasError;
 use crate::locking::ProjectLock;
 use crate::models::{Atom, AtomType, Confidence, IndexEntry};
@@ -141,10 +141,19 @@ pub struct UpsertResult {
 
 /// Create or update an atom.
 pub fn upsert(req: UpsertRequest) -> Result<UpsertResult, AtlasError> {
+    upsert_with_activation(req, None)
+}
+
+/// Create or update an atom with optional activated context.
+pub fn upsert_with_activation(
+    req: UpsertRequest,
+    activated: Option<&ProjectContext>,
+) -> Result<UpsertResult, AtlasError> {
     // Validate array fields aren't stringified JSON
     validate_array_fields(&req)?;
 
-    let ctx = detect_context()?;
+    let detected = detect_context_full(None, None, activated)?;
+    let ctx = detected.context;
 
     // Determine org/project based on whether this is an update or create
     let (target_org, target_project) = if let Some(ref id) = req.id {

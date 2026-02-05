@@ -84,16 +84,6 @@ pub fn validate_name(name: &str) -> Result<(), AtlasError> {
     Ok(())
 }
 
-/// Detect project context from the current working directory.
-///
-/// Detection priority:
-/// 1. ATLAS_ORG + ATLAS_PROJECT env vars (explicit configuration via CLI)
-/// 2. Git remote URL parsing
-/// 3. Fallback: global/{current_directory_name}
-pub fn detect_context() -> Result<ProjectContext, AtlasError> {
-    Ok(detect_context_full(None, None, None)?.context)
-}
-
 /// Detect project context with optional HTTP header overrides.
 ///
 /// Detection priority:

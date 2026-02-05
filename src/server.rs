@@ -11,10 +11,11 @@ use serde::{Deserialize, Serialize};
 use crate::config::get_project_path;
 use crate::context::{validate_name, ProjectContext};
 use crate::tools::{
-    delete_atom, enable_local_storage, get_atom, get_context_with_activation, link, list_atoms,
-    list_projects_with_activation, search, unlink, upsert, DeleteAtomRequest,
-    EnableLocalStorageRequest, GetAtomRequest, LinkRequest, ListAtomsRequest, SearchRequest,
-    UpsertRequest,
+    delete_atom_with_activation, enable_local_storage, get_atom_with_activation,
+    get_context_with_activation, link_with_activation, list_atoms_with_activation,
+    list_projects_with_activation, search_with_activation, unlink_with_activation,
+    upsert_with_activation, DeleteAtomRequest, EnableLocalStorageRequest, GetAtomRequest,
+    LinkRequest, ListAtomsRequest, SearchRequest, UpsertRequest,
 };
 
 const INSTRUCTIONS: &str = r#"Atlas MCP - Long-term memory for AI agents.
@@ -136,7 +137,9 @@ impl AtlasServer {
         description = "Search knowledge atoms by title, tags, type, and confidence. Returns full atom IDs (org/project/id). Optionally filter by scope: org name (e.g., 'acme') searches all projects in that org, or 'org/project' (e.g., 'acme/backend') for a specific project. Default: searches entire detected org with current project scoring higher."
     )]
     async fn search(&self, params: Parameters<SearchRequest>) -> Result<CallToolResult, McpError> {
-        let results = search(params.0).map_err(to_mcp_error)?;
+        let activated = self.get_activated_context();
+        let results =
+            search_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&results).unwrap_or_default(),
         )]))
@@ -146,7 +149,8 @@ impl AtlasServer {
         description = "Create or update a knowledge atom. For updates, provide id as full path (org/project/id), project/id, or bare id. Omit id for new atoms. IMPORTANT: Array fields (tags, sources, links, pitfalls) must be JSON arrays, not stringified arrays. Correct: tags: [\"api\", \"rust\"]. Wrong: tags: \"[\\\"api\\\", \\\"rust\\\"]\""
     )]
     async fn upsert(&self, params: Parameters<UpsertRequest>) -> Result<CallToolResult, McpError> {
-        let result = upsert(params.0).map_err(to_mcp_error)?;
+        let activated = self.get_activated_context();
+        let result = upsert_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&result).unwrap_or_default(),
         )]))
@@ -156,7 +160,8 @@ impl AtlasServer {
         description = "Get full atom content by ID. Accepts org/project/id, project/id, or bare id (context fills gaps)."
     )]
     async fn get(&self, params: Parameters<GetAtomRequest>) -> Result<CallToolResult, McpError> {
-        let atom = get_atom(params.0).map_err(to_mcp_error)?;
+        let activated = self.get_activated_context();
+        let atom = get_atom_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&atom).unwrap_or_default(),
         )]))
@@ -169,7 +174,9 @@ impl AtlasServer {
         &self,
         params: Parameters<ListAtomsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let results = list_atoms(params.0).map_err(to_mcp_error)?;
+        let activated = self.get_activated_context();
+        let results =
+            list_atoms_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&results).unwrap_or_default(),
         )]))
@@ -182,7 +189,9 @@ impl AtlasServer {
         &self,
         params: Parameters<DeleteAtomRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let result = delete_atom(params.0).map_err(to_mcp_error)?;
+        let activated = self.get_activated_context();
+        let result =
+            delete_atom_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&result).unwrap_or_default(),
         )]))
@@ -192,7 +201,8 @@ impl AtlasServer {
         description = "Create a directed link from source to target atom. Both must be in same org. Accepts org/project/id, project/id, or bare id."
     )]
     async fn link(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
-        let result = link(params.0).map_err(to_mcp_error)?;
+        let activated = self.get_activated_context();
+        let result = link_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&result).unwrap_or_default(),
         )]))
@@ -202,7 +212,8 @@ impl AtlasServer {
         description = "Remove a directed link from source to target atom. Target need not exist (allows cleaning dangling links). Accepts org/project/id, project/id, or bare id."
     )]
     async fn unlink(&self, params: Parameters<LinkRequest>) -> Result<CallToolResult, McpError> {
-        let result = unlink(params.0).map_err(to_mcp_error)?;
+        let activated = self.get_activated_context();
+        let result = unlink_with_activation(params.0, activated.as_ref()).map_err(to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&result).unwrap_or_default(),
         )]))
@@ -328,6 +339,230 @@ impl AtlasServer {
 impl Default for AtlasServer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use rmcp::handler::server::wrapper::Parameters;
+    use serde_json::Value;
+
+    use super::*;
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn with_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
+
+    fn temp_storage_dir() -> std::path::PathBuf {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("atlas-test-{}", now));
+        fs::create_dir_all(&dir).expect("create temp storage dir");
+        dir
+    }
+
+    fn extract_json_text(result: &CallToolResult) -> Value {
+        let text = result
+            .content
+            .first()
+            .and_then(|content| content.as_text())
+            .map(|text| text.text.clone())
+            .expect("tool result should include text content");
+        serde_json::from_str(&text).expect("tool result should be valid json")
+    }
+
+    fn upsert_request(title: &str) -> UpsertRequest {
+        UpsertRequest {
+            id: None,
+            title: title.to_string(),
+            atom_type: crate::models::AtomType::Note,
+            confidence: crate::models::Confidence::Medium,
+            summary: "summary".to_string(),
+            details: None,
+            pitfalls: None,
+            tags: None,
+            sources: None,
+            links: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_activation_applies_to_tools() {
+        let _lock = with_env_lock();
+
+        let storage_dir = temp_storage_dir();
+        let storage = storage_dir.to_string_lossy().to_string();
+
+        let orig_storage = std::env::var("ATLAS_STORAGE").ok();
+        let orig_org = std::env::var("ATLAS_ORG").ok();
+        let orig_project = std::env::var("ATLAS_PROJECT").ok();
+
+        std::env::set_var("ATLAS_STORAGE", &storage);
+        std::env::remove_var("ATLAS_ORG");
+        std::env::remove_var("ATLAS_PROJECT");
+
+        let server = AtlasServer::new();
+        let org = "test-org";
+        let project = "test-project";
+        server.set_activated_context(Some(ProjectContext::new(org.into(), project.into())));
+
+        // Upsert should land in activated org/project.
+        let upsert_result = server
+            .upsert(Parameters(upsert_request("First")))
+            .await
+            .expect("upsert should succeed");
+        let upsert_json = extract_json_text(&upsert_result);
+        let id = upsert_json
+            .get("id")
+            .and_then(|v| v.as_str())
+            .expect("upsert response should include id");
+        assert!(
+            id.starts_with(&format!("{}/{}", org, project)),
+            "upsert id should include activated org/project"
+        );
+
+        let bare_id = id
+            .split('/')
+            .last()
+            .expect("id should contain atom id");
+
+        // get_atom should resolve bare ids against activated context.
+        let get_result = server
+            .get(Parameters(GetAtomRequest {
+                id: bare_id.to_string(),
+            }))
+            .await
+            .expect("get should succeed");
+        let get_json = extract_json_text(&get_result);
+        assert_eq!(
+            get_json.get("title").and_then(|v| v.as_str()),
+            Some("First")
+        );
+
+        // list_atoms should list from activated project.
+        let list_result = server
+            .atoms(Parameters(ListAtomsRequest {
+                types: None,
+                tags: None,
+                confidence: None,
+                limit: Some(50),
+                scope: None,
+            }))
+            .await
+            .expect("list atoms should succeed");
+        let list_json = extract_json_text(&list_result);
+        assert!(
+            list_json.as_array().map(|items| !items.is_empty()).unwrap_or(false),
+            "list atoms should include the created atom"
+        );
+
+        // search should use activated context for scoring and ids.
+        let search_result = server
+            .search(Parameters(SearchRequest {
+                query: Some("First".to_string()),
+                types: None,
+                tags: None,
+                confidence: None,
+                page: Some(1),
+                page_size: Some(20),
+                scope: None,
+            }))
+            .await
+            .expect("search should succeed");
+        let search_json = extract_json_text(&search_result);
+        let search_id = search_json["results"]
+            .as_array()
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("id"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        assert!(
+            search_id.starts_with(&format!("{}/{}", org, project)),
+            "search results should include activated org/project"
+        );
+
+        // link/unlink with bare ids should stay in activated project.
+        let second_upsert = server
+            .upsert(Parameters(upsert_request("Second")))
+            .await
+            .expect("second upsert should succeed");
+        let second_json = extract_json_text(&second_upsert);
+        let second_id = second_json
+            .get("id")
+            .and_then(|v| v.as_str())
+            .expect("upsert response should include id");
+        let second_bare = second_id
+            .split('/')
+            .last()
+            .expect("id should contain atom id");
+
+        let link_result = server
+            .link(Parameters(LinkRequest {
+                source: bare_id.to_string(),
+                target: second_bare.to_string(),
+            }))
+            .await
+            .expect("link should succeed");
+        let link_json = extract_json_text(&link_result);
+        assert!(
+            link_json
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .starts_with(&format!("{}/{}", org, project)),
+            "link source should include activated org/project"
+        );
+
+        let unlink_result = server
+            .unlink(Parameters(LinkRequest {
+                source: bare_id.to_string(),
+                target: second_bare.to_string(),
+            }))
+            .await
+            .expect("unlink should succeed");
+        let unlink_json = extract_json_text(&unlink_result);
+        assert!(
+            unlink_json
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .starts_with(&format!("{}/{}", org, project)),
+            "unlink source should include activated org/project"
+        );
+
+        // delete should resolve bare id against activated project.
+        let delete_result = server
+            .delete(Parameters(DeleteAtomRequest {
+                id: bare_id.to_string(),
+            }))
+            .await
+            .expect("delete should succeed");
+        let delete_json = extract_json_text(&delete_result);
+        assert_eq!(delete_json.get("deleted").and_then(|v| v.as_bool()), Some(true));
+
+        // Restore env.
+        match orig_storage {
+            Some(val) => std::env::set_var("ATLAS_STORAGE", val),
+            None => std::env::remove_var("ATLAS_STORAGE"),
+        }
+        match orig_org {
+            Some(val) => std::env::set_var("ATLAS_ORG", val),
+            None => std::env::remove_var("ATLAS_ORG"),
+        }
+        match orig_project {
+            Some(val) => std::env::set_var("ATLAS_PROJECT", val),
+            None => std::env::remove_var("ATLAS_PROJECT"),
+        }
+
+        let _ = fs::remove_dir_all(storage_dir);
     }
 }
 
