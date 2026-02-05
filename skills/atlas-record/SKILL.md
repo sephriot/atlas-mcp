@@ -1,6 +1,6 @@
 ---
 name: atlas-record
-description: Record new knowledge to Atlas long-term memory. Use after completing non-trivial work (bug fixes, features, refactors), discovering patterns or gotchas, making architectural decisions, or learning something reusable. Triggers on: "record this", "save to Atlas", "remember this pattern", "add a gotcha", or when suggesting knowledge worth preserving.
+description: "Record new knowledge to Atlas long-term memory. Use after completing non-trivial work (bug fixes, features, refactors), discovering patterns or gotchas, making architectural decisions, or learning something reusable. Triggers on: `record this`, `save to Atlas`, `remember this pattern`, `add a gotcha`, or when suggesting knowledge worth preserving."
 ---
 
 # Atlas Record

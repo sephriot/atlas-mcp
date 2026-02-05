@@ -1,6 +1,6 @@
 ---
 name: atlas-retrieve
-description: Retrieve knowledge from Atlas long-term memory. Use when starting any task, answering questions about the codebase, or needing context about patterns, gotchas, decisions, or conventions. Triggers on: "what do we know about X", "check Atlas for", "search knowledge", "find patterns", "any gotchas", or at the start of any non-trivial task.
+description: "Retrieve knowledge from Atlas long-term memory. Use when starting any task, answering questions about the codebase, or needing context about patterns, gotchas, decisions, or conventions. Triggers on: `what do we know about X`, `check Atlas for`, `search knowledge`, `find patterns`, `any gotchas`, or at the start of any non-trivial task."
 ---
 
 # Atlas Retrieve
