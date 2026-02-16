@@ -71,7 +71,7 @@ pub enum Commands {
         confidence: Option<Confidence>,
 
         /// Maximum number of results
-        #[arg(long, short = 'l', default_value = "50")]
+        #[arg(long, short = 'l', default_value = "1000")]
         limit: usize,
 
         /// Scope filter: org name or org/project path
