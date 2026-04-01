@@ -332,6 +332,15 @@ pub fn enable_local_storage(
         std::fs::create_dir_all(parent)?;
     }
 
+    // If local-storage symlink exists but points to a missing target, remove it so
+    // this call can repair the project back into a consistent repo-local state.
+    let central_path_is_broken_symlink = std::fs::symlink_metadata(&central_project_path)
+        .map(|metadata| metadata.file_type().is_symlink() && !central_project_path.exists())
+        .unwrap_or(false);
+    if central_path_is_broken_symlink {
+        std::fs::remove_file(&central_project_path)?;
+    }
+
     // Migrate existing atoms from central storage to local
     if central_project_path.exists() && !central_project_path.is_symlink() {
         let central_atoms_path = central_project_path.join("atoms");
@@ -578,5 +587,133 @@ fn move_file(src: &std::path::Path, dest: &std::path::Path) -> std::io::Result<(
             Ok(())
         }
         Err(e) => Err(e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{enable_local_storage, EnableLocalStorageRequest};
+    use crate::error::AtlasError;
+    use crate::locking::ProjectLock;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &Path) -> Self {
+            let original = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(prefix: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time should be after epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!("atlas-{prefix}-{unique}"));
+            std::fs::create_dir_all(&path).expect("temp dir should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn test_enable_local_storage_repairs_broken_symlink() {
+        let _guard = env_lock().lock().expect("env lock should succeed");
+        let temp = TempDir::new("repair-broken-symlink");
+        let storage_root = temp.path().join("storage");
+        let project_root = temp.path().join("repo");
+        let broken_target = temp.path().join("missing-repo").join(".atlas");
+        let repaired_target = project_root.join(".atlas");
+        let central_project_path = storage_root.join("orgs").join("acme").join("atlas");
+
+        std::fs::create_dir_all(&project_root).expect("project root should exist");
+        std::fs::create_dir_all(central_project_path.parent().expect("parent exists"))
+            .expect("central parent should exist");
+        std::os::unix::fs::symlink(&broken_target, &central_project_path)
+            .expect("broken symlink should be created");
+
+        let _storage_guard = EnvVarGuard::set("ATLAS_STORAGE", &storage_root);
+        let _project_root_guard = EnvVarGuard::set("ATLAS_PROJECT_ROOT", &project_root);
+
+        let result = enable_local_storage(EnableLocalStorageRequest {
+            org: "acme".to_string(),
+            project: "atlas".to_string(),
+        })
+        .expect("enable_local_storage should repair broken symlink");
+
+        assert!(result.symlink_created);
+        assert_eq!(result.atoms_migrated, 0);
+        assert_eq!(
+            std::fs::read_link(&central_project_path).unwrap(),
+            repaired_target
+        );
+        assert!(repaired_target.join("atoms").is_dir());
+        assert!(repaired_target.join("index.yaml").is_file());
+    }
+
+    #[test]
+    fn test_project_lock_reports_broken_symlink() {
+        let _guard = env_lock().lock().expect("env lock should succeed");
+        let temp = TempDir::new("broken-symlink-error");
+        let storage_root = temp.path().join("storage");
+        let central_project_path = storage_root.join("orgs").join("acme").join("atlas");
+        let broken_target = temp.path().join("missing-repo").join(".atlas");
+
+        std::fs::create_dir_all(central_project_path.parent().expect("parent exists"))
+            .expect("central parent should exist");
+        std::os::unix::fs::symlink(&broken_target, &central_project_path)
+            .expect("broken symlink should be created");
+
+        let _storage_guard = EnvVarGuard::set("ATLAS_STORAGE", &storage_root);
+
+        let error = match ProjectLock::acquire("acme", "atlas") {
+            Ok(_) => panic!("broken symlink should be rejected"),
+            Err(error) => error,
+        };
+
+        match error {
+            AtlasError::Storage(message) => {
+                assert!(message.contains("Broken local-storage symlink"));
+                assert!(message.contains("enable_local_storage"));
+                assert!(message.contains("acme/atlas"));
+            }
+            other => panic!("expected storage error, got {other:?}"),
+        }
     }
 }

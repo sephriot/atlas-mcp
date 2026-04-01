@@ -1,9 +1,12 @@
-use crate::config::{get_atoms_path, get_index_path, get_project_path};
+use crate::config::{
+    ensure_project_path_is_usable, get_atoms_path, get_index_path, get_project_path,
+};
 use crate::error::AtlasError;
 use crate::models::Index;
 
 /// Load the index for a project, creating if it doesn't exist.
 pub fn load_index(org: &str, project: &str) -> Result<Index, AtlasError> {
+    ensure_project_path_is_usable(org, project)?;
     let path = get_index_path(org, project)?;
 
     if !path.exists() {
@@ -17,6 +20,7 @@ pub fn load_index(org: &str, project: &str) -> Result<Index, AtlasError> {
 
 /// Save the index for a project.
 pub fn save_index(org: &str, project: &str, index: &Index) -> Result<(), AtlasError> {
+    ensure_project_path_is_usable(org, project)?;
     let path = get_index_path(org, project)?;
 
     // Ensure project directory exists
@@ -31,6 +35,7 @@ pub fn save_index(org: &str, project: &str, index: &Index) -> Result<(), AtlasEr
 
 /// Ensure the project directory structure exists.
 pub fn ensure_project_exists(org: &str, project: &str) -> Result<(), AtlasError> {
+    ensure_project_path_is_usable(org, project)?;
     let project_path = get_project_path(org, project)?;
     let atoms_path = get_atoms_path(org, project)?;
 

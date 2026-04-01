@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::config::get_atoms_path;
+use crate::config::{ensure_project_path_is_usable, get_atoms_path};
 use crate::error::AtlasError;
 use crate::models::Atom;
 
@@ -11,6 +11,7 @@ fn get_atom_path(org: &str, project: &str, id: &str) -> Result<PathBuf, AtlasErr
 
 /// Read an atom from disk.
 pub fn read_atom(org: &str, project: &str, id: &str) -> Result<Atom, AtlasError> {
+    ensure_project_path_is_usable(org, project)?;
     let path = get_atom_path(org, project, id)?;
 
     if !path.exists() {
@@ -24,6 +25,7 @@ pub fn read_atom(org: &str, project: &str, id: &str) -> Result<Atom, AtlasError>
 
 /// Write an atom to disk.
 pub fn write_atom(org: &str, project: &str, atom: &Atom) -> Result<(), AtlasError> {
+    ensure_project_path_is_usable(org, project)?;
     let path = get_atom_path(org, project, &atom.id)?;
 
     // Ensure atoms directory exists
@@ -38,6 +40,7 @@ pub fn write_atom(org: &str, project: &str, atom: &Atom) -> Result<(), AtlasErro
 
 /// Delete an atom file from disk.
 pub fn delete_atom_file(org: &str, project: &str, id: &str) -> Result<(), AtlasError> {
+    ensure_project_path_is_usable(org, project)?;
     let path = get_atom_path(org, project, id)?;
 
     if path.exists() {

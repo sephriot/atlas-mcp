@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use fs2::FileExt;
 
-use crate::config::get_project_path;
+use crate::config::{ensure_project_path_is_usable, get_project_path};
 use crate::error::AtlasError;
 
 /// A file-based lock for a project's index.
@@ -14,6 +14,7 @@ pub struct ProjectLock {
 impl ProjectLock {
     /// Acquire an exclusive lock for the given project.
     pub fn acquire(org: &str, project: &str) -> Result<Self, AtlasError> {
+        ensure_project_path_is_usable(org, project)?;
         let lock_path = get_lock_path(org, project)?;
 
         // Ensure directory exists
