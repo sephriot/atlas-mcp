@@ -1,0 +1,41 @@
+id: K-000015
+title: Agent Skills Complement Rather Than Replace Atlas Atoms
+type: decision
+confidence: medium
+summary: Atlas knowledge should not be modeled primarily as agent skills. Skills are best for focused reusable workflows with instructions, resources, and optional scripts, while Atlas atoms remain a better fit for granular searchable long-term knowledge such as notes, gotchas, recipes, and decisions.
+details: |-
+  Rationale:
+  - Atlas is optimized for fine-grained retrieval and persistence: project-scoped YAML atoms, typed entries, searchable tags/confidence, and on-demand loading via search/get.
+  - OpenAI Codex skills and Claude agent skills are workflow packages, not a memory substrate. Both emphasize focused scope, strong trigger descriptions, and progressive disclosure; OpenAI skills are directories with SKILL.md plus optional scripts/references and can declare MCP dependencies.
+  - OpenAI memory guidance for long-term notes recommends guardrails like distillation and rejecting instruction-shaped payloads, which further separates memory objects from executable workflow instructions.
+  - Converting each atom into a skill would create poor trigger surfaces, duplicate metadata, reduce granular search/filtering, and blur stable knowledge with imperative behavior.
+  - A hybrid approach fits better: keep atoms as the canonical knowledge layer, and add a small number of skills that orchestrate Atlas retrieval/recording or package high-value multi-step recipes.
+
+  Recommended mapping:
+  - note/gotcha/decision remain atoms
+  - recipe stays an atom by default, and graduates to a skill only when it requires imperative workflow, multiple resources, or deterministic helper scripts
+  - skills may depend on atlas-mcp for retrieval, but should not replace the atom store
+
+  Implication for atlas-mcp:
+  - If desired, atlas-mcp could support exporting selected recipe atoms into skill skeletons or linking atoms from skills, but replacing the atom model with skills would be an architectural regression for retrieval and maintenance.
+tags:
+- skills
+- agent-skills
+- architecture
+- knowledge-model
+- atlas
+- memory
+- decision
+sources:
+- https://developers.openai.com/codex/skills/
+- https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+- https://developers.openai.com/api/docs/guides/prompt-engineering/
+- https://developers.openai.com/cookbook/examples/agents_sdk/context_personalization/
+- README.md
+- ATLAS.md
+- skills/atlas-retrieve/SKILL.md
+- skills/atlas-record/SKILL.md
+links:
+- K-000001
+- K-000003
+updated_at: 2026-03-13

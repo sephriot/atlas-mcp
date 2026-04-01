@@ -1,4 +1,4 @@
-next_id: 15
+next_id: 17
 entries:
 - id: K-000001
   title: Atlas MCP Project Overview
@@ -167,3 +167,47 @@ entries:
   - src/tools/atoms.rs
   - src/tools/search.rs
   - src/tools/link.rs
+- id: K-000015
+  title: Agent Skills Complement Rather Than Replace Atlas Atoms
+  type: decision
+  confidence: medium
+  tags:
+  - skills
+  - agent-skills
+  - architecture
+  - knowledge-model
+  - atlas
+  - memory
+  - decision
+  sources:
+  - https://developers.openai.com/codex/skills/
+  - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+  - https://developers.openai.com/api/docs/guides/prompt-engineering/
+  - https://developers.openai.com/cookbook/examples/agents_sdk/context_personalization/
+  - README.md
+  - ATLAS.md
+  - skills/atlas-retrieve/SKILL.md
+  - skills/atlas-record/SKILL.md
+  links:
+  - K-000001
+  - K-000003
+- id: K-000016
+  title: Broken Local-Storage Symlink Should Fail Fast With Repair Hint
+  type: gotcha
+  confidence: high
+  tags:
+  - storage
+  - symlink
+  - broken-symlink
+  - local-storage
+  - gotcha
+  - repair
+  sources:
+  - src/config.rs
+  - src/locking.rs
+  - src/storage/index.rs
+  - src/storage/atoms.rs
+  - src/tools/atoms.rs
+  links:
+  - K-000003
+  - K-000004

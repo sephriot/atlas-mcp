@@ -1,0 +1,32 @@
+id: K-000016
+title: Broken Local-Storage Symlink Should Fail Fast With Repair Hint
+type: gotcha
+confidence: high
+summary: If `~/.atlas/orgs/{org}/{project}` is a dangling symlink, normal storage operations can surface raw filesystem errors such as `File exists (os error 17)` from `create_dir_all` or lock setup. Validate the project path before filesystem writes/locks and return a targeted error that tells the user to run `enable_local_storage`.
+details: |-
+  Behavior:
+  - Detect dangling project symlinks with `symlink_metadata` plus `!path.exists()`.
+  - Reject normal operations early with a storage error that includes the broken link target and a repair hint.
+  - `enable_local_storage` should repair this state by removing a dangling central symlink when needed and recreating the symlink to the repo-local `.atlas` directory.
+
+  This avoids surprising silent mode switches back to central storage and gives the user an explicit recovery path.
+pitfalls:
+- A dangling symlink may look absent to `Path::exists()` while still blocking `create_dir_all` with `os error 17`.
+- Checking `exists()` alone is not enough for symlink-backed project storage paths.
+tags:
+- storage
+- symlink
+- broken-symlink
+- local-storage
+- gotcha
+- repair
+sources:
+- src/config.rs
+- src/locking.rs
+- src/storage/index.rs
+- src/storage/atoms.rs
+- src/tools/atoms.rs
+links:
+- K-000003
+- K-000004
+updated_at: 2026-04-01
