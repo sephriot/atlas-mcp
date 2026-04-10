@@ -54,9 +54,11 @@ ACTIVATION:
 CITATION: Reference atom IDs in your reasoning, e.g., [K-000042]
 
 PARAMETER FORMAT:
+- upsert requires title, type, confidence, summary. Fields "type" and "confidence" MUST be JSON strings (e.g. "recipe", "high"), not bare words (recipe without quotes is invalid JSON).
 - Array fields (tags, sources, links, pitfalls) MUST be JSON arrays, NOT strings
 - CORRECT: tags: ["api", "rust"]
-- WRONG: tags: "[\"api\", \"rust\"]""#;
+- WRONG: tags: "[\"api\", \"rust\"]"
+"#;
 
 // ============================================================================
 // Request/Response types for activate_project
@@ -145,7 +147,7 @@ impl AtlasServer {
     }
 
     #[tool(
-        description = "Create or update a knowledge atom. For updates, provide id as full path (org/project/id), project/id, or bare id. Omit id for new atoms. IMPORTANT: Array fields (tags, sources, links, pitfalls) must be JSON arrays, not stringified arrays. Correct: tags: [\"api\", \"rust\"]. Wrong: tags: \"[\\\"api\\\", \\\"rust\\\"]\""
+        description = r#"Create or update a knowledge atom. For updates, provide id as full path (org/project/id), project/id, or bare id. Omit id for new atoms. Required: title, type, confidence, summary — type and confidence must be JSON strings (e.g. "recipe", "high"), not bare identifiers. Minimal valid arguments: {"title":"My note","type":"recipe","confidence":"high","summary":"Brief text"}. Optional arrays (tags, sources, links, pitfalls) must be JSON arrays like ["a","b"], not stringified arrays. Correct: tags: ["api","rust"]. Wrong: tags: "[\"api\",\"rust\"]"."#
     )]
     async fn upsert(&self, params: Parameters<UpsertRequest>) -> Result<CallToolResult, McpError> {
         let activated = self.get_activated_context();

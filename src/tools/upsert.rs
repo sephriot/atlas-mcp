@@ -96,11 +96,13 @@ pub struct UpsertRequest {
     /// Short descriptive title
     pub title: String,
 
-    /// Type of knowledge
+    /// Type of knowledge. In JSON this must be a quoted string: "note", "gotcha", "recipe", or "decision" (not a bare identifier).
     #[serde(rename = "type")]
+    #[schemars(extend("examples" = ["recipe"]))]
     pub atom_type: AtomType,
 
-    /// Confidence level
+    /// Confidence level. In JSON this must be a quoted string: "high", "medium", or "low".
+    #[schemars(extend("examples" = ["high"]))]
     pub confidence: Confidence,
 
     /// Brief explanation
@@ -273,6 +275,22 @@ mod tests {
             sources,
             links,
         }
+    }
+
+    #[test]
+    fn test_upsert_request_deserializes_minimal_json() {
+        let json = r#"{"title":"T","type":"recipe","confidence":"high","summary":"S"}"#;
+        let req: UpsertRequest = serde_json::from_str(json).expect("valid JSON");
+        assert_eq!(req.title, "T");
+        assert_eq!(req.atom_type, AtomType::Recipe);
+        assert_eq!(req.confidence, Confidence::High);
+        assert_eq!(req.summary, "S");
+    }
+
+    #[test]
+    fn test_upsert_request_invalid_json_unquoted_type_is_error() {
+        let json = r#"{"title":"T","type":recipe,"confidence":"high","summary":"S"}"#;
+        assert!(serde_json::from_str::<UpsertRequest>(json).is_err());
     }
 
     #[test]
