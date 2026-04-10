@@ -1,4 +1,4 @@
-next_id: 17
+next_id: 18
 entries:
 - id: K-000001
   title: Atlas MCP Project Overview
@@ -211,3 +211,19 @@ entries:
   links:
   - K-000003
   - K-000004
+- id: K-000017
+  title: rmcp 1.x upgrade requires builder-style server metadata and HTTP config
+  type: recipe
+  confidence: high
+  tags:
+  - rmcp
+  - dependency-upgrade
+  - migration
+  - mcp
+  - rust
+  sources:
+  - Cargo.toml
+  - src/main.rs
+  - src/server.rs
+  links:
+  - K-000002

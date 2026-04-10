@@ -102,12 +102,11 @@ async fn run_http_server(_server: AtlasServer, port: u16) -> anyhow::Result<()> 
     use tokio_util::sync::CancellationToken;
 
     let ct = CancellationToken::new();
-    let config = StreamableHttpServerConfig {
-        sse_keep_alive: Some(std::time::Duration::from_secs(30)),
-        sse_retry: None,
-        stateful_mode: true,
-        cancellation_token: ct.clone(),
-    };
+    let config = StreamableHttpServerConfig::default()
+        .with_sse_keep_alive(Some(std::time::Duration::from_secs(30)))
+        .with_sse_retry(None)
+        .with_stateful_mode(true)
+        .with_cancellation_token(ct.clone());
 
     let session_manager = Arc::new(LocalSessionManager::default());
     let service = StreamableHttpService::new(|| Ok(AtlasServer::new()), session_manager, config);

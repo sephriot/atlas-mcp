@@ -573,18 +573,14 @@ mod tests {
 #[rmcp::tool_handler]
 impl rmcp::handler::server::ServerHandler for AtlasServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            server_info: Implementation {
-                name: "atlas".into(),
-                title: Some("Atlas MCP".into()),
-                version: env!("CARGO_PKG_VERSION").into(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(INSTRUCTIONS.into()),
-        }
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_protocol_version(ProtocolVersion::LATEST)
+            .with_server_info(
+                Implementation::new("atlas", env!("CARGO_PKG_VERSION"))
+                    .with_title("Atlas MCP")
+                    .with_description("Centralized knowledge management MCP server"),
+            )
+            .with_instructions(INSTRUCTIONS)
     }
 }
 

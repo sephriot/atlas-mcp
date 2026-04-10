@@ -1,0 +1,18 @@
+id: K-000017
+title: rmcp 1.x upgrade requires builder-style server metadata and HTTP config
+type: recipe
+confidence: high
+summary: 'Upgrading this project from `rmcp 0.14` to `1.x` was a small migration. Two code changes were required: construct `StreamableHttpServerConfig` via `Default` plus fluent setters instead of a struct literal because the type is now `#[non_exhaustive]` and includes `json_response`; construct `ServerInfo` and `Implementation` via `ServerInfo::new(...)` / `Implementation::new(...)` plus `.with_*` setters because those structs are also `#[non_exhaustive]` and `Implementation` now includes `description`. After these changes, `cargo test` and `cargo clippy -- -D warnings` passed unchanged.'
+tags:
+- rmcp
+- dependency-upgrade
+- migration
+- mcp
+- rust
+sources:
+- Cargo.toml
+- src/main.rs
+- src/server.rs
+links:
+- K-000002
+updated_at: 2026-04-10
